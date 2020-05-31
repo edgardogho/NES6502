@@ -1,5 +1,5 @@
-objs := main.o
-out := unlam.nes
+objs := mario.o
+out := mario.nes
 
 all: $(out)
 
@@ -11,11 +11,11 @@ clean:
 # Assemble
 
 %.o: %.s
-	ca65 $< -o $@ -l list.lst
+	ca65 $< -o $@ -l mario.lst
 
-main.o: main.s
+mario.o: mario.s
 
 # Link
 
-unlam.nes: link.x $(objs)
+mario.nes: link.x $(objs)
 	ld65 -C link.x $(objs) -o $@
