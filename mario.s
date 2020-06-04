@@ -255,6 +255,8 @@ SIL = 24
     LSDSky:       .res 1
     ;Color del cielo usado en el primer byte de la paleta de colores
     ;para cambiar el color del cielo cuando mario escucha LSD.
+    
+    PaletteBlink: .res 1
 
 
 ;;Segmento de codigo guardado en la ROM
@@ -334,6 +336,8 @@ LoadPalettesLoop:
   STA Puntos1
   LDA #$00
   STA Puntos0
+  LDA #$00
+  STA PaletteBlink
 
   ;; Ahora que las paletas estan cargadas, podemos dibujar el fondo
   JSR SUBDibujaFondo
@@ -406,6 +410,13 @@ FIN:
 	;;Llevamos la cuenta de los frame en FrameCounter
 	;;Se resetea cada 50 frames (1 segundo)
 	inc FrameCounter
+	LDA FrameCounter
+	AND #%00000111
+	CMP #%00000111
+	BNE incSeg
+	JSR SUBBlinkPalette
+
+incSeg:	
 	LDA FrameCounter
 	CMP #50
 	BNE sigueMain
@@ -505,6 +516,52 @@ nmi:
 
 ;;Aqui comienzan las subrutinas auxiliares
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+SUBBlinkPalette:
+
+    LDA $2002     ; read PPU status to reset the high/low latch to high
+	LDA #$3F
+	STA $2006     ; write the high byte of $3F10 address
+	LDA #$00
+	STA $2006     ; write the low byte of $3F10 address
+	LDA #$21
+	STA $2007
+	
+  ;;Si la paleta es $16 pasar a $25, si es $25 pasar
+	LDA PaletteBlink
+	CMP #$01
+	BMI Paleta1
+	CMP #$02
+	BMI Paleta2
+	CMP #$04
+	BMI Paleta3
+	CMP #$07
+	BMI Paleta4
+	LDA #00
+	STA PaletteBlink
+
+Paleta1:
+	LDA #$05
+	STA $2007
+	JMP finBlinkPalette
+	
+Paleta2:
+	LDA #$16
+	STA $2007
+	JMP finBlinkPalette
+
+Paleta3:
+	LDA #$27
+	STA $2007
+	JMP finBlinkPalette
+
+Paleta4:
+	LDA #$37
+	STA $2007
+  
+finBlinkPalette:
+   INC PaletteBlink
+   RTS
   
 
 ;;Esta subrutina actualiza el byte de la paleta que define el fondo
@@ -1452,15 +1509,19 @@ NewWorld:
 NewWorldAttribute:
 	.byte $54,$50,$50,$00,$55,$01,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
 	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$04,$05,$00
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$f0,$00
+	.byte $00,$a0,$a0,$00,$a0,$20,$00,$00,$00,$00,$00,$00,$00,$00,$f0,$00
 	.byte $f0,$b0,$a0,$fc,$f3,$a0,$ff,$00,$0a,$0a,$0a,$0a,$0a,$0a,$0a,$0a
 ;;Paleta de colores original
 NewWorldPalette:
-	.byte $21,$27,$16,$0f,$21,$20,$21,$0f,$21,$20,$16,$0f,$21,$2a,$1a,$0f
+;	.byte $21,$27,$16,$0f,$21,$20,$21,$0f,$21,$20,$16,$0f,$21,$2a,$1a,$0f
+    .byte $21,$27,$16,$0f,$21,$20,$21,$0f,$21,$37,$16,$0f,$21,$2a,$1a,$0f
     .byte $21,MEDIUM_RED,LIGHT_ORANGE,MEDIUM_YELLOW
     .byte  LIGHT_ORANGE,MEDIUM_RED,$20,LIGHT_ORANGE
     .byte  BLACK,MEDIUM_RED,MEDIUM_RED,LIGHT_CHARTREUSE
     .byte  BLACK,MEDIUM_RED,MEDIUM_RED,LIGHT_CHARTREUSE 
+
+
+
 
 	
 
