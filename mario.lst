@@ -1,4 +1,4 @@
-ca65 V2.16 - Ubuntu 2.16-2
+ca65 V2.18 - Git 0d21a2b
 Main file   : mario.s
 Current file: mario.s
 
@@ -16,6 +16,8 @@ Current file: mario.s
 000000r 1               ;; para un costado se muestra el movimiento. Cuando se queda quieto
 000000r 1               ;; mira para el ultimo lado. Cuando salta levanta la mano y cuando cae
 000000r 1               ;; junta los brazos. Tiene soporte de gravedad.
+000000r 1               
+000000r 1               ;; Mapa dibujado con NES Screen Tool
 000000r 1               
 000000r 1               ;; Autor Edgardo Gho
 000000r 1               ;; Junio 2020
@@ -263,9 +265,11 @@ Current file: mario.s
 000017r 1                   ;Color del cielo usado en el primer byte de la paleta de colores
 000017r 1                   ;para cambiar el color del cielo cuando mario escucha LSD.
 000017r 1               
-000017r 1               
-000017r 1               ;;Segmento de codigo guardado en la ROM
-000017r 1               .segment "CODE"
+000017r 1  xx               PaletteBlink: .res 1
+000018r 1               
+000018r 1               
+000018r 1               ;;Segmento de codigo guardado en la ROM
+000018r 1               .segment "CODE"
 000000r 1               
 000000r 1               ;Rutina de interrupcion (IRQ)
 000000r 1               ;No es utilizada por ahora
@@ -341,1282 +345,1341 @@ Current file: mario.s
 000059r 1  85 rr          STA Puntos1
 00005Br 1  A9 00          LDA #$00
 00005Dr 1  85 rr          STA Puntos0
-00005Fr 1               
-00005Fr 1                 ;; Ahora que las paletas estan cargadas, podemos dibujar el fondo
-00005Fr 1  20 rr rr       JSR SUBDibujaFondo
-000062r 1               
-000062r 1                 ;; Encendemos el PPU
-000062r 1                 ;; y el barrido vertical
-000062r 1                 ;; y apuntamos el PPU a
-000062r 1                 ;; la tabla 0 de sprites
-000062r 1                 ;; y 1 para fondos
-000062r 1               
-000062r 1  A9 90          LDA #%10010000
-000064r 1  8D 00 20       STA $2000
-000067r 1               
-000067r 1                 ;; Encendemos Sprites, Background y sin clipping en lado izquierdo
-000067r 1  A9 1E          LDA #%00011110
-000069r 1  8D 01 20       STA $2001
-00006Cr 1               
-00006Cr 1                 ;;Apagamos el scroll del background (fondo)
-00006Cr 1  A9 00          LDA #$00
-00006Er 1  8D 05 20       STA $2005
-000071r 1  8D 05 20       STA $2005
-000074r 1               
-000074r 1                 ;;Habilitamos las interrupciones
-000074r 1  58             CLI
-000075r 1               
-000075r 1                 ;;Prendemos audio
-000075r 1                 ;;  Solo canal Pulse 1 (primer canal onda cuadrada)
-000075r 1  A9 01           lda #%00000001
-000077r 1  8D 15 40        sta $4015
-00007Ar 1               
-00007Ar 1                 ;;Inicializamos las variables
-00007Ar 1                 ;;Le damos un offset inicial a mario en X e Y
-00007Ar 1  A9 C0          LDA  #$C0
-00007Cr 1  85 rr          STA  MarioOffsetY
-00007Er 1  A9 20          LDA #$20
-000080r 1  85 rr          STA MarioOffsetX
-000082r 1                 ;;Cielo color azul al principio
-000082r 1  A9 21          LDA #$21
-000084r 1  85 rr          STA LSDSky
-000086r 1                 ;;Arranca mirando a la izquierda
-000086r 1  A9 01          LDA #$01
-000088r 1  85 rr          STA MarioUltimoLado
-00008Ar 1  A9 80          LDA #$80
-00008Cr 1  85 rr          STA MarioEstadoSprite
-00008Er 1                 ;;No arranca saltando
-00008Er 1  A9 00          LDA #$00
-000090r 1  85 rr          STA MarioEstadoSalto
-000092r 1               
-000092r 1                 ;;Ponemos en cero otras variables
-000092r 1  85 rr          STA FrameCounter
-000094r 1  85 rr          STA HongoVisible
-000096r 1  85 rr          STA LSDPlaying
-000098r 1  85 rr          STA LSDNote
-00009Ar 1  85 rr          STA LSDNoteTime
-00009Cr 1               
-00009Cr 1               
-00009Cr 1                 ;;Aqui termina la runtina de reset.. el codigo va a quedar ciclando
-00009Cr 1                 ;;en la siguiente posicion. Dado que solo se puede refrezcar la
-00009Cr 1                 ;;pantalla cuando no se esta dibujando.. usamos el FlagNMI para
-00009Cr 1                 ;;indicar cuando es seguro refrezcar la pantalla.
-00009Cr 1               FIN:
-00009Cr 1  A5 rr        	LDA FlagNMI
-00009Er 1  F0 FC        	BEQ FIN ;;Queda loopeando mientras FlagNMI=0
-0000A0r 1  A9 00        	LDA #$0
-0000A2r 1  85 rr        	STA FlagNMI
-0000A4r 1               	;;Ahora es seguro escribir cosas en la memoria de la pantalla
-0000A4r 1               
-0000A4r 1               	;;Empezamos controlando la musica
-0000A4r 1  20 rr rr     	JSR SUBPlayLSD
-0000A7r 1               	;;Llevamos la cuenta de los frame en FrameCounter
-0000A7r 1               	;;Se resetea cada 50 frames (1 segundo)
-0000A7r 1  E6 rr        	inc FrameCounter
-0000A9r 1  A5 rr        	LDA FrameCounter
-0000ABr 1  C9 32        	CMP #50
-0000ADr 1  D0 04        	BNE sigueMain
-0000AFr 1  A9 00        	LDA #0
-0000B1r 1  85 rr        	STA FrameCounter
-0000B3r 1               sigueMain:
-0000B3r 1                   ;;Dibujamos los tiles de SCORE en caso que hayan cambiado
-0000B3r 1  20 rr rr     	JSR SUBActualizaScore
-0000B6r 1               
-0000B6r 1                 ;Dado que en $0200~$02ff tenemos cargados los sprites
-0000B6r 1                 ;Utilizamos el DMA para transferir estos 256 bytes a memoria
-0000B6r 1                 ;de video en la ubicacion de los sprites.
-0000B6r 1  A9 00          LDA #$00
-0000B8r 1  8D 03 20       STA $2003  ; cargamos en el DMA la parte baja de 0200
-0000BBr 1  A9 02          LDA #$02
-0000BDr 1  8D 14 40       STA $4014  ; cargamos en el DMA la parte alta de 0200 y comienza.
-0000C0r 1                 ;Esto deberia bloquear el procesador hasta que termina.
-0000C0r 1               
-0000C0r 1                 ;;Leemos el joystick. Esto actualiza la variable JoystickPress
-0000C0r 1  20 rr rr       JSR SUBReadJoy
-0000C3r 1               
-0000C3r 1                 ;;Actualizamos la posicion de mario
-0000C3r 1  A5 rr          LDA JoystickPress
-0000C5r 1  29 01          AND #BUTTON_RIGHT
-0000C7r 1  F0 0B          BEQ noRight
-0000C9r 1                 ;; Se apreto el boton derecho
-0000C9r 1  A9 00          LDA #$00
-0000CBr 1  85 rr          STA MarioUltimoLado ;;Actualizamos el lado que mira mario
-0000CDr 1                 ;;Verificamos si a la derecha hay algo
-0000CDr 1  20 rr rr       JSR SUBVerificarCostado
-0000D0r 1                 ;;Si el resultado da 0, entonces es seguro mover, sino no
-0000D0r 1  D0 02          BNE noRight
-0000D2r 1  E6 rr          INC MarioOffsetX
-0000D4r 1               
-0000D4r 1               noRight:
-0000D4r 1                 ;; Verificamos si apreto  a la izquierda
-0000D4r 1  A5 rr          LDA JoystickPress
-0000D6r 1  29 02          AND #BUTTON_LEFT
-0000D8r 1  F0 0B          BEQ noLeft
-0000DAr 1  A9 01          LDA #$01
-0000DCr 1  85 rr          STA MarioUltimoLado ;;Actualizamos el lado que mira mario
-0000DEr 1                 ;;Verificamos si a la izquierda hay algo
-0000DEr 1  20 rr rr       JSR SUBVerificarCostado
-0000E1r 1                 ;;Si el resultado da 0, entonces es seguro mover, sino no
-0000E1r 1  D0 02          BNE noLeft
-0000E3r 1  C6 rr          DEC MarioOffsetX
-0000E5r 1               
-0000E5r 1               noLeft:
-0000E5r 1                 ;;Vemos si apreto el boton A
-0000E5r 1  A5 rr          LDA JoystickPress
-0000E7r 1  29 80          AND #BUTTON_A
-0000E9r 1  F0 10          BEQ noButtonA
-0000EBr 1                 ;;Si se apreto A, hay que verificar si no esta saltando
-0000EBr 1  A5 rr          LDA MarioEstadoSalto
-0000EDr 1  29 80          AND #%10000000
-0000EFr 1  D0 0A          BNE finBotonesCheck ;; si Acc=0 no estaba saltando
-0000F1r 1                 ;;Hay que ver que no este cayendo por gravedad
-0000F1r 1  A5 rr          LDA MarioEstadoSalto
-0000F3r 1  29 40          AND #%01000000
-0000F5r 1  D0 04          BNE finBotonesCheck
-0000F7r 1                 ;;Como no estaba saltando ni cayendo por gravedad entonces
-0000F7r 1                 ;;Ponemos 1 en el bit mas significativo de MarioEstadoSalto
-0000F7r 1                 ;;Para indicar que tiene que saltar
-0000F7r 1  A9 80          LDA #%10000000
-0000F9r 1  85 rr          STA MarioEstadoSalto
-0000FBr 1               noButtonA:
-0000FBr 1                 ;;Aqui deberiamos verificar el boton B si se usara para algo
-0000FBr 1               finBotonesCheck:
-0000FBr 1               
-0000FBr 1               ;;;;
-0000FBr 1               ;; Ahora que se actualizaron los offset de X,Y de mario
-0000FBr 1               ;; podemos llamar a la funcion que actualiza el sprite
-0000FBr 1  20 rr rr       JSR SUBDibujaMario
-0000FEr 1               
-0000FEr 1                 ;;Ahora que se actualizo la posicion de mario en pantalla
-0000FEr 1                 ;;Podemos terminar y volver al loop principal a esperar
-0000FEr 1                 ;;otro refrezco de pantalla.
-0000FEr 1  4C rr rr       JMP FIN
-000101r 1               
-000101r 1               ;Rutina de interrupcion (NMI)
-000101r 1               ;Esta rutina se dispara cuando la pantalla
-000101r 1               ;se dibujo por completo, y el barrido vertical
-000101r 1               ;esta volviendo al inicio. Deberia poder utilizarse
-000101r 1               ;solo por 2250 ciclos aprox. Deberia dispararse 25 veces
-000101r 1               ;por segundo o 50 con interlaceado
-000101r 1               nmi:
-000101r 1                 ;;Guardamos en el stack el estado del CPU (flags y acumulador)
-000101r 1  48             PHA
-000102r 1  08             PHP
-000103r 1                 ;;Incrementamos el flag NMI que deberia pasar de 0 a 1
-000103r 1  E6 rr          INC FlagNMI
-000105r 1                 ;;Ahora recuperamos el estado del CPU (flags y acumulador) y listo
-000105r 1  28             PLP
-000106r 1  68             PLA
-000107r 1  40             RTI
-000108r 1               
-000108r 1               
-000108r 1               ;;Aqui comienzan las subrutinas auxiliares
-000108r 1               ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-000108r 1               
-000108r 1               
-000108r 1               ;;Esta subrutina actualiza el byte de la paleta que define el fondo
-000108r 1               ;;para poder cambiar el color del cielo cuando mario se come el hongo.
-000108r 1               SUBChangeSky:
-000108r 1  AD 02 20       LDA $2002       ;Se resetea el puerto del PPU para poder escribirlo
-00010Br 1  A9 3F          LDA #$3F
-00010Dr 1  8D 06 20       STA $2006       ;Cargamos la parte alta de la direccion $3F00
-000110r 1  A9 00          LDA #$00
-000112r 1  8D 06 20       STA $2006       ;Cargamos la parte baja de la direccion $3F00
-000115r 1               
-000115r 1  A5 rr          LDA LSDSky      ;Cargamos en el acumulador el valor para el cielo
-000117r 1  8D 07 20       STA $2007       ;Forzamos el valor en el PPU apuntando a $3F00
-00011Ar 1               				  ;; Este valor comienza la paleta, y la primer posicion
-00011Ar 1               				  ;; indica el color del background.
-00011Ar 1  60             RTS
-00011Br 1               
-00011Br 1               ;;Esta rutina actualiza los tiles hasta el tile de score que cambia
-00011Br 1               ;;constantemente, por ende lo tenemos que actualizar.
-00011Br 1               SUBActualizaScore:
-00011Br 1  AD 02 20       LDA $2002             ; Hay que leer el PPU para resetear la direccion
-00011Er 1  A9 20          LDA #$20
-000120r 1  8D 06 20       STA $2006             ; Se carga la parte alta de $2000
-000123r 1  A9 00          LDA #$00
-000125r 1  8D 06 20       STA $2006             ; Se carga la parte baja de $2000
-000128r 1  A2 00          LDX #$00              ;
-00012Ar 1               
-00012Ar 1               
-00012Ar 1                 ;;El SCORE se muestra en las posiciones $65 y $66 asi que cargamos
-00012Ar 1                 ;;el mapa hasta esas posiciones y luego cargamos a mano el score
-00012Ar 1               LoadBackgroundLoopScore:
-00012Ar 1  BD rr rr       LDA NewWorld, x
-00012Dr 1  8D 07 20       STA $2007
-000130r 1  E8             INX
-000131r 1  E0 65          CPX #$65  ;;Mientras no cargue $65 que siga
-000133r 1  D0 F5          BNE LoadBackgroundLoopScore
-000135r 1                  ;;Ahora que cargo los primeros $65 tiles, viene el score
-000135r 1  A5 rr          LDA Puntos1
-000137r 1  8D 07 20       STA $2007
-00013Ar 1  A5 rr          LDA Puntos0
-00013Cr 1  8D 07 20       STA $2007
-00013Fr 1                 ;;Listo
-00013Fr 1  60             RTS
-000140r 1               
-000140r 1               ;;Grabamos la cancion LSD (Lucy in the Sky with Diamonds)
-000140r 1               LSD:
-000140r 1  04 0C 09 0C      .byte NE4, 12, NA4, 12, NE5, 12, NG4, 12, NE5, 12, NA4, 12, NF4b, 12,NA4, 12, NE5, 12, NF4, 10, ND5, 8, NC5b,8, NA4, 8  ,$FF
-000144r 1  10 0C 07 0C  
-000148r 1  10 0C 09 0C  
-00015Br 1               
-00015Br 1               ;;Esta subrutina reproduce nota a nota la cancion LSD
-00015Br 1               SUBPlayLSD:
-00015Br 1  48               PHA
-00015Cr 1                   ;;Primero vemos si la cancion esta activa
-00015Cr 1  A5 rr            LDA LSDPlaying
-00015Er 1  F0 52            BEQ finPlayLSD ;;No esta sonando
-000160r 1                   ;;Si esta sonando, tenemos que verificar que el tiempo de nota
-000160r 1                   ;;no haya llegando a cero
-000160r 1  A5 rr            LDA LSDNoteTime
-000162r 1                   ;;Si no es cero, entonces lo dejamos
-000162r 1  D0 32            BNE decNota
-000164r 1                   ;;Si el tiempo de nota es cero, avanzamos a la siguiente nota
-000164r 1  A9 BF            LDA #%10111111 ;;Configuramos el Pulse1 para que toque constante
-000166r 1  8D 00 40     	STA $4000	   ;;a maximo volumen
-000169r 1               
-000169r 1                   ;;Buscamos la nota que hay que tocar
-000169r 1  A6 rr            LDX LSDNote ;; Esta variable apunta a LSD
-00016Br 1  BD rr rr         LDA LSD,x ;; Carga el elemento X del vector LSD
-00016Er 1  C9 FF            CMP #$FF ;;Si es el ultimo apago la musica
-000170r 1  F0 28            BEQ apagaLSD
-000172r 1                   ;;Si no es la ultima nota, la buscamos en NOTAS
-000172r 1  AA               TAX ;;El indice para buscar en el vector notas esta en A, lo
-000173r 1               		;;pasamos a X para usarlo en modo indexado
-000173r 1  BD rr rr         LDA NOTAS,x ;Ahora buscamos NOTAS[x] siendo X el LSDNote
-000176r 1  8D 02 40         STA $4002
-000179r 1                   ;;Las primeras 8 notas requieren un 1 en $4003, pero el resto no
-000179r 1  A9 00            LDA #0 ;;Cargamos un 0 originalmente y le sumamos 1 si hace falta
-00017Br 1  E0 08            CPX #8
-00017Dr 1  10 02            BPL altaCero ;;Si  la nota es mayor a 8, dejamos el 0
-00017Fr 1  A9 01            LDA #1 ;;Sino ponemos un 1
-000181r 1               altaCero:
-000181r 1  8D 03 40     	STA $4003 ;;Guardamos la parte alta que puede ser 0 o 1.
-000184r 1                   ;;Cargamos ahora el tiempo que debe durar la nota
-000184r 1  E6 rr            INC LSDNote
-000186r 1  A6 rr            LDX LSDNote
-000188r 1  BD rr rr         LDA LSD,x
-00018Br 1  85 rr            STA LSDNoteTime
-00018Dr 1                   ;;Apuntamos a la siguiente nota
-00018Dr 1  E6 rr            INC LSDNote
-00018Fr 1                   ;;Cambiamos el color del cielo
-00018Fr 1  E6 rr            INC LSDSky
-000191r 1  20 rr rr         JSR SUBChangeSky
-000194r 1                   ;;Restauramos A y volvemos
-000194r 1  68               PLA
-000195r 1  60               RTS
-000196r 1               ;; Si el tiempo nota no llego a 0, decrementamos el tiempo y salimos
-000196r 1               decNota:
-000196r 1  C6 rr        	DEC LSDNoteTime
-000198r 1  68           	PLA
-000199r 1  60           	RTS
-00019Ar 1               ;; Si tenemos que apagar la musica, ponemos 0 en PULSE1 en PPU
-00019Ar 1               apagaLSD:
-00019Ar 1  A9 00        	LDA #0
-00019Cr 1  8D 00 40     	STA $4000
-00019Fr 1  8D 02 40     	STA $4002
-0001A2r 1  8D 03 40     	STA $4003
-0001A5r 1               	;;Reseteamos el tiempo de nota a 0 y apuntamos el vector de nota
-0001A5r 1               	;;a la primer nota y apagamos la musica.
-0001A5r 1  85 rr        	STA LSDNoteTime
-0001A7r 1  85 rr        	STA LSDNote
-0001A9r 1  85 rr        	STA LSDPlaying
-0001ABr 1               	;;Restauramos el cielo al color normal.
-0001ABr 1  A9 21        	LDA #$21
-0001ADr 1  85 rr        	STA LSDSky
-0001AFr 1  20 rr rr     	JSR SUBChangeSky
-0001B2r 1                   ;;Se termino
-0001B2r 1               finPlayLSD:
-0001B2r 1  68               PLA
-0001B3r 1  60           	RTS
-0001B4r 1               
-0001B4r 1               
-0001B4r 1               ;;Esta subrutina incrementa el score en 1. Pero como se muestra en dos
-0001B4r 1               ;;digitos entonces hay que incrementar el primero y luego el segundo
-0001B4r 1               ;;dependiendo del valor del primer digito
-0001B4r 1               SUBIncrementarScore:
-0001B4r 1  E6 rr            INC Puntos0
-0001B6r 1  A5 rr            LDA Puntos0
-0001B8r 1  C9 0A            CMP #10
-0001BAr 1  F0 01            BEQ overPuntos0
-0001BCr 1  60               RTS
-0001BDr 1               overPuntos0:
-0001BDr 1  A9 00        	LDA #0
-0001BFr 1  85 rr        	STA Puntos0
-0001C1r 1  E6 rr        	INC Puntos1
-0001C3r 1  A5 rr        	LDA Puntos1
-0001C5r 1  C9 0A        	CMP #10
-0001C7r 1  F0 01        	BEQ overPuntos1
-0001C9r 1  60           	RTS
-0001CAr 1               overPuntos1:
-0001CAr 1  A9 00        	LDA #0
-0001CCr 1  85 rr        	STA Puntos1
-0001CEr 1  85 rr            STA Puntos0
-0001D0r 1  60               RTS
-0001D1r 1               
-0001D1r 1               
-0001D1r 1               SUBVerificarCostado:
-0001D1r 1               	;;Esta subrutina verifica si mario se puede mover hacia un costado
-0001D1r 1               	;;Dependiendo si se apreto derecha o izquierda
-0001D1r 1               	;;Si el acumulador tiene 0, verifica derecha
-0001D1r 1               	;;Si el acumulador tiene 1 , verifica izquierda
-0001D1r 1  F0 12        	BEQ verificaDerecha
-0001D3r 1               	;;Limpiamos TileCount para contar colisiones
-0001D3r 1  A9 00        	LDA #$00
-0001D5r 1  85 rr        	STA TileCount
-0001D7r 1               	;;Para verificar a la izquierda, tenemos que ver si hay un tile
-0001D7r 1               	;;en MarioOffsetX-1 con ambos MarioOffsetY y MarioOffsetY
-0001D7r 1  A5 rr        	LDA MarioOffsetX
-0001D9r 1  18           	CLC
-0001DAr 1  E9 01        	SBC #1
-0001DCr 1  85 rr        	STA FindTileX
-0001DEr 1  A5 rr        	LDA MarioOffsetY
-0001E0r 1  85 rr        	STA FindTileY
-0001E2r 1  4C rr rr     	JMP detectarColision
-0001E5r 1               
-0001E5r 1               verificaDerecha:
-0001E5r 1  A9 00            LDA #$00
-0001E7r 1  85 rr            STA TileCount
-0001E9r 1  A5 rr            LDA MarioOffsetX
-0001EBr 1  18               CLC
-0001ECr 1  69 11            ADC #17
-0001EEr 1  85 rr            STA FindTileX
-0001F0r 1  A5 rr            LDA MarioOffsetY
-0001F2r 1  85 rr            STA FindTileY
-0001F4r 1               
-0001F4r 1               detectarColision:
-0001F4r 1                   ;;Ahora FindTileX y FindTileY tienen el primer punto a comparar
-0001F4r 1  20 rr rr         JSR SUBFindTile
-0001F7r 1                   ;;Si dio mayor a $3F entonces hay colision
-0001F7r 1  C9 3F            CMP #$3F
-0001F9r 1  30 02            BMI noHayColisionUno
-0001FBr 1  E6 rr            INC TileCount
-0001FDr 1               noHayColisionUno:
-0001FDr 1  18               CLC
-0001FEr 1  A5 rr            LDA FindTileY
-000200r 1  69 10            ADC #16
-000202r 1  85 rr            STA FindTileY
-000204r 1  20 rr rr         JSR SUBFindTile
-000207r 1  C9 3F            CMP #$3F
-000209r 1  30 02            BMI noHayColisionDos
-00020Br 1  E6 rr            INC TileCount
-00020Dr 1               noHayColisionDos:
-00020Dr 1  A5 rr        	LDA TileCount
-00020Fr 1               	;; si TileCount es 0 entonces no hay colision
-00020Fr 1               	;; Si es mayor a 0 entonces hay colision
-00020Fr 1               	;; Devolvemos esto
-00020Fr 1  60           	RTS
-000210r 1               
-000210r 1               ;;Rutina para leer el registro del Joystick tomada de
-000210r 1               ;; https://wiki.nesdev.com/w/index.php/Controller_reading_code
-000210r 1               SUBReadJoy:
-000210r 1  A9 01            lda #$01
-000212r 1                   ; While the strobe bit is set, buttons will be continuously reloaded.
-000212r 1                   ; This means that reading from JOYPAD1 will only return the state of the
-000212r 1                   ; first button: button A.
-000212r 1  8D 16 40         sta JOYPAD1
-000215r 1  85 rr            sta JoystickPress
-000217r 1  4A               lsr a        ; now A is 0
-000218r 1                   ; By storing 0 into JOYPAD1, the strobe bit is cleared and the reloading stops.
-000218r 1                   ; This allows all 8 buttons (newly reloaded) to be read from JOYPAD1.
-000218r 1  8D 16 40         sta JOYPAD1
-00021Br 1               loop:
-00021Br 1  AD 16 40         lda JOYPAD1
-00021Er 1  4A               lsr a	       ; bit 0 -> Carry
-00021Fr 1  26 rr            rol JoystickPress  ; Carry -> bit 0; bit 7 -> Carry
-000221r 1  90 F8            bcc loop
-000223r 1  60               rts
-000224r 1               
-000224r 1               
-000224r 1                ;;Esta subrutina busca un TILE en un mapa (NewWorld) usando
-000224r 1                ;;coordenadas X e Y apuntadas por FindTileX, FindTileY y usa un indice
-000224r 1                ;;de 2 bytes para recorrer el mapa (NameTablePointer)
-000224r 1                ;;Codigo tomado de:
-000224r 1                ;; http://forums.nesdev.com/viewtopic.php?t=19551
-000224r 1               SUBFindTile:
-000224r 1  18             clc
-000225r 1                 ;;Dado que buscamos en una matriz de 32x30 donde cada elemento tiene
-000225r 1                 ;; 8x8 pixeles, tenemos que dividir por 8 y multiplicar por 32
-000225r 1                 ;; pero esto es lo mismo que multiplicar por 4, asi que tomamos
-000225r 1                 ;; los 5 bits mas significativos de la posicion Y
-000225r 1  A5 rr          lda FindTileY
-000227r 1  29 F8          and #%11111000
-000229r 1               
-000229r 1                 ;;Y shifteamos a la izquierda dos veces para multiplicar por 4
-000229r 1  0A             asl
-00022Ar 1  26 rr          rol NameTablePointer+1
-00022Cr 1  0A             asl
-00022Dr 1  26 rr          rol NameTablePointer+1
-00022Fr 1                 ;;Y esos valores los guardamos en la parte alta de NameTablePointer
-00022Fr 1  18             clc
-000230r 1  69 rr          adc #<NewWorld ;;Cargamos la parte baja del mapa
-000232r 1  85 rr          sta NameTablePointer+0
-000234r 1  A5 rr          lda NameTablePointer+1
-000236r 1  29 03          and #%00000011
-000238r 1  69 rr          adc #>NewWorld
-00023Ar 1  85 rr          sta NameTablePointer+1 ;;Ahora la parte alta del mapa
+00005Fr 1  A9 00          LDA #$00
+000061r 1  85 rr          STA PaletteBlink
+000063r 1               
+000063r 1                 ;; Ahora que las paletas estan cargadas, podemos dibujar el fondo
+000063r 1  20 rr rr       JSR SUBDibujaFondo
+000066r 1               
+000066r 1                 ;; Encendemos el PPU
+000066r 1                 ;; y el barrido vertical
+000066r 1                 ;; y apuntamos el PPU a
+000066r 1                 ;; la tabla 0 de sprites
+000066r 1                 ;; y 1 para fondos
+000066r 1               
+000066r 1  A9 90          LDA #%10010000
+000068r 1  8D 00 20       STA $2000
+00006Br 1               
+00006Br 1                 ;; Encendemos Sprites, Background y sin clipping en lado izquierdo
+00006Br 1  A9 1E          LDA #%00011110
+00006Dr 1  8D 01 20       STA $2001
+000070r 1               
+000070r 1                 ;;Apagamos el scroll del background (fondo)
+000070r 1  A9 00          LDA #$00
+000072r 1  8D 05 20       STA $2005
+000075r 1  8D 05 20       STA $2005
+000078r 1               
+000078r 1                 ;;Habilitamos las interrupciones
+000078r 1  58             CLI
+000079r 1               
+000079r 1                 ;;Prendemos audio
+000079r 1                 ;;  Solo canal Pulse 1 (primer canal onda cuadrada)
+000079r 1  A9 01           lda #%00000001
+00007Br 1  8D 15 40        sta $4015
+00007Er 1               
+00007Er 1                 ;;Inicializamos las variables
+00007Er 1                 ;;Le damos un offset inicial a mario en X e Y
+00007Er 1  A9 C0          LDA  #$C0
+000080r 1  85 rr          STA  MarioOffsetY
+000082r 1  A9 20          LDA #$20
+000084r 1  85 rr          STA MarioOffsetX
+000086r 1                 ;;Cielo color azul al principio
+000086r 1  A9 21          LDA #$21
+000088r 1  85 rr          STA LSDSky
+00008Ar 1                 ;;Arranca mirando a la izquierda
+00008Ar 1  A9 01          LDA #$01
+00008Cr 1  85 rr          STA MarioUltimoLado
+00008Er 1  A9 80          LDA #$80
+000090r 1  85 rr          STA MarioEstadoSprite
+000092r 1                 ;;No arranca saltando
+000092r 1  A9 00          LDA #$00
+000094r 1  85 rr          STA MarioEstadoSalto
+000096r 1               
+000096r 1                 ;;Ponemos en cero otras variables
+000096r 1  85 rr          STA FrameCounter
+000098r 1  85 rr          STA HongoVisible
+00009Ar 1  85 rr          STA LSDPlaying
+00009Cr 1  85 rr          STA LSDNote
+00009Er 1  85 rr          STA LSDNoteTime
+0000A0r 1               
+0000A0r 1               
+0000A0r 1                 ;;Aqui termina la runtina de reset.. el codigo va a quedar ciclando
+0000A0r 1                 ;;en la siguiente posicion. Dado que solo se puede refrezcar la
+0000A0r 1                 ;;pantalla cuando no se esta dibujando.. usamos el FlagNMI para
+0000A0r 1                 ;;indicar cuando es seguro refrezcar la pantalla.
+0000A0r 1               FIN:
+0000A0r 1  A5 rr        	LDA FlagNMI
+0000A2r 1  F0 FC        	BEQ FIN ;;Queda loopeando mientras FlagNMI=0
+0000A4r 1  A9 00        	LDA #$0
+0000A6r 1  85 rr        	STA FlagNMI
+0000A8r 1               	;;Ahora es seguro escribir cosas en la memoria de la pantalla
+0000A8r 1               
+0000A8r 1               	;;Empezamos controlando la musica
+0000A8r 1  20 rr rr     	JSR SUBPlayLSD
+0000ABr 1               	;;Llevamos la cuenta de los frame en FrameCounter
+0000ABr 1               	;;Se resetea cada 50 frames (1 segundo)
+0000ABr 1  E6 rr        	inc FrameCounter
+0000ADr 1  A5 rr        	LDA FrameCounter
+0000AFr 1  29 07        	AND #%00000111
+0000B1r 1  C9 07        	CMP #%00000111
+0000B3r 1  D0 03        	BNE incSeg
+0000B5r 1  20 rr rr     	JSR SUBBlinkPalette
+0000B8r 1               
+0000B8r 1               incSeg:
+0000B8r 1  A5 rr        	LDA FrameCounter
+0000BAr 1  C9 32        	CMP #50
+0000BCr 1  D0 04        	BNE sigueMain
+0000BEr 1  A9 00        	LDA #0
+0000C0r 1  85 rr        	STA FrameCounter
+0000C2r 1               sigueMain:
+0000C2r 1                   ;;Dibujamos los tiles de SCORE en caso que hayan cambiado
+0000C2r 1  20 rr rr     	JSR SUBActualizaScore
+0000C5r 1               
+0000C5r 1                 ;Dado que en $0200~$02ff tenemos cargados los sprites
+0000C5r 1                 ;Utilizamos el DMA para transferir estos 256 bytes a memoria
+0000C5r 1                 ;de video en la ubicacion de los sprites.
+0000C5r 1  A9 00          LDA #$00
+0000C7r 1  8D 03 20       STA $2003  ; cargamos en el DMA la parte baja de 0200
+0000CAr 1  A9 02          LDA #$02
+0000CCr 1  8D 14 40       STA $4014  ; cargamos en el DMA la parte alta de 0200 y comienza.
+0000CFr 1                 ;Esto deberia bloquear el procesador hasta que termina.
+0000CFr 1               
+0000CFr 1                 ;;Leemos el joystick. Esto actualiza la variable JoystickPress
+0000CFr 1  20 rr rr       JSR SUBReadJoy
+0000D2r 1               
+0000D2r 1                 ;;Actualizamos la posicion de mario
+0000D2r 1  A5 rr          LDA JoystickPress
+0000D4r 1  29 01          AND #BUTTON_RIGHT
+0000D6r 1  F0 0B          BEQ noRight
+0000D8r 1                 ;; Se apreto el boton derecho
+0000D8r 1  A9 00          LDA #$00
+0000DAr 1  85 rr          STA MarioUltimoLado ;;Actualizamos el lado que mira mario
+0000DCr 1                 ;;Verificamos si a la derecha hay algo
+0000DCr 1  20 rr rr       JSR SUBVerificarCostado
+0000DFr 1                 ;;Si el resultado da 0, entonces es seguro mover, sino no
+0000DFr 1  D0 02          BNE noRight
+0000E1r 1  E6 rr          INC MarioOffsetX
+0000E3r 1               
+0000E3r 1               noRight:
+0000E3r 1                 ;; Verificamos si apreto  a la izquierda
+0000E3r 1  A5 rr          LDA JoystickPress
+0000E5r 1  29 02          AND #BUTTON_LEFT
+0000E7r 1  F0 0B          BEQ noLeft
+0000E9r 1  A9 01          LDA #$01
+0000EBr 1  85 rr          STA MarioUltimoLado ;;Actualizamos el lado que mira mario
+0000EDr 1                 ;;Verificamos si a la izquierda hay algo
+0000EDr 1  20 rr rr       JSR SUBVerificarCostado
+0000F0r 1                 ;;Si el resultado da 0, entonces es seguro mover, sino no
+0000F0r 1  D0 02          BNE noLeft
+0000F2r 1  C6 rr          DEC MarioOffsetX
+0000F4r 1               
+0000F4r 1               noLeft:
+0000F4r 1                 ;;Vemos si apreto el boton A
+0000F4r 1  A5 rr          LDA JoystickPress
+0000F6r 1  29 80          AND #BUTTON_A
+0000F8r 1  F0 10          BEQ noButtonA
+0000FAr 1                 ;;Si se apreto A, hay que verificar si no esta saltando
+0000FAr 1  A5 rr          LDA MarioEstadoSalto
+0000FCr 1  29 80          AND #%10000000
+0000FEr 1  D0 0A          BNE finBotonesCheck ;; si Acc=0 no estaba saltando
+000100r 1                 ;;Hay que ver que no este cayendo por gravedad
+000100r 1  A5 rr          LDA MarioEstadoSalto
+000102r 1  29 40          AND #%01000000
+000104r 1  D0 04          BNE finBotonesCheck
+000106r 1                 ;;Como no estaba saltando ni cayendo por gravedad entonces
+000106r 1                 ;;Ponemos 1 en el bit mas significativo de MarioEstadoSalto
+000106r 1                 ;;Para indicar que tiene que saltar
+000106r 1  A9 80          LDA #%10000000
+000108r 1  85 rr          STA MarioEstadoSalto
+00010Ar 1               noButtonA:
+00010Ar 1                 ;;Aqui deberiamos verificar el boton B si se usara para algo
+00010Ar 1               finBotonesCheck:
+00010Ar 1               
+00010Ar 1               ;;;;
+00010Ar 1               ;; Ahora que se actualizaron los offset de X,Y de mario
+00010Ar 1               ;; podemos llamar a la funcion que actualiza el sprite
+00010Ar 1  20 rr rr       JSR SUBDibujaMario
+00010Dr 1               
+00010Dr 1                 ;;Ahora que se actualizo la posicion de mario en pantalla
+00010Dr 1                 ;;Podemos terminar y volver al loop principal a esperar
+00010Dr 1                 ;;otro refrezco de pantalla.
+00010Dr 1  4C rr rr       JMP FIN
+000110r 1               
+000110r 1               ;Rutina de interrupcion (NMI)
+000110r 1               ;Esta rutina se dispara cuando la pantalla
+000110r 1               ;se dibujo por completo, y el barrido vertical
+000110r 1               ;esta volviendo al inicio. Deberia poder utilizarse
+000110r 1               ;solo por 2250 ciclos aprox. Deberia dispararse 25 veces
+000110r 1               ;por segundo o 50 con interlaceado
+000110r 1               nmi:
+000110r 1                 ;;Guardamos en el stack el estado del CPU (flags y acumulador)
+000110r 1  48             PHA
+000111r 1  08             PHP
+000112r 1                 ;;Incrementamos el flag NMI que deberia pasar de 0 a 1
+000112r 1  E6 rr          INC FlagNMI
+000114r 1                 ;;Ahora recuperamos el estado del CPU (flags y acumulador) y listo
+000114r 1  28             PLP
+000115r 1  68             PLA
+000116r 1  40             RTI
+000117r 1               
+000117r 1               
+000117r 1               ;;Aqui comienzan las subrutinas auxiliares
+000117r 1               ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+000117r 1               
+000117r 1               SUBBlinkPalette:
+000117r 1               
+000117r 1  AD 02 20         LDA $2002     ; read PPU status to reset the high/low latch to high
+00011Ar 1  A9 3F        	LDA #$3F
+00011Cr 1  8D 06 20     	STA $2006     ; write the high byte of $3F10 address
+00011Fr 1  A9 00        	LDA #$00
+000121r 1  8D 06 20     	STA $2006     ; write the low byte of $3F10 address
+000124r 1  A9 21        	LDA #$21
+000126r 1  8D 07 20     	STA $2007
+000129r 1               
+000129r 1                 ;;Si la paleta es $16 pasar a $25, si es $25 pasar
+000129r 1  A5 rr        	LDA PaletteBlink
+00012Br 1  C9 01        	CMP #$01
+00012Dr 1  30 10        	BMI Paleta1
+00012Fr 1  C9 02        	CMP #$02
+000131r 1  30 14        	BMI Paleta2
+000133r 1  C9 04        	CMP #$04
+000135r 1  30 18        	BMI Paleta3
+000137r 1  C9 07        	CMP #$07
+000139r 1  30 1C        	BMI Paleta4
+00013Br 1  A9 00        	LDA #00
+00013Dr 1  85 rr        	STA PaletteBlink
+00013Fr 1               
+00013Fr 1               Paleta1:
+00013Fr 1  A9 05        	LDA #$05
+000141r 1  8D 07 20     	STA $2007
+000144r 1  4C rr rr     	JMP finBlinkPalette
+000147r 1               
+000147r 1               Paleta2:
+000147r 1  A9 16        	LDA #$16
+000149r 1  8D 07 20     	STA $2007
+00014Cr 1  4C rr rr     	JMP finBlinkPalette
+00014Fr 1               
+00014Fr 1               Paleta3:
+00014Fr 1  A9 27        	LDA #$27
+000151r 1  8D 07 20     	STA $2007
+000154r 1  4C rr rr     	JMP finBlinkPalette
+000157r 1               
+000157r 1               Paleta4:
+000157r 1  A9 37        	LDA #$37
+000159r 1  8D 07 20     	STA $2007
+00015Cr 1               
+00015Cr 1               finBlinkPalette:
+00015Cr 1  E6 rr           INC PaletteBlink
+00015Er 1  60              RTS
+00015Fr 1               
+00015Fr 1               
+00015Fr 1               ;;Esta subrutina actualiza el byte de la paleta que define el fondo
+00015Fr 1               ;;para poder cambiar el color del cielo cuando mario se come el hongo.
+00015Fr 1               SUBChangeSky:
+00015Fr 1  AD 02 20       LDA $2002       ;Se resetea el puerto del PPU para poder escribirlo
+000162r 1  A9 3F          LDA #$3F
+000164r 1  8D 06 20       STA $2006       ;Cargamos la parte alta de la direccion $3F00
+000167r 1  A9 00          LDA #$00
+000169r 1  8D 06 20       STA $2006       ;Cargamos la parte baja de la direccion $3F00
+00016Cr 1               
+00016Cr 1  A5 rr          LDA LSDSky      ;Cargamos en el acumulador el valor para el cielo
+00016Er 1  8D 07 20       STA $2007       ;Forzamos el valor en el PPU apuntando a $3F00
+000171r 1               				  ;; Este valor comienza la paleta, y la primer posicion
+000171r 1               				  ;; indica el color del background.
+000171r 1  60             RTS
+000172r 1               
+000172r 1               ;;Esta rutina actualiza los tiles hasta el tile de score que cambia
+000172r 1               ;;constantemente, por ende lo tenemos que actualizar.
+000172r 1               SUBActualizaScore:
+000172r 1  AD 02 20       LDA $2002             ; Hay que leer el PPU para resetear la direccion
+000175r 1  A9 20          LDA #$20
+000177r 1  8D 06 20       STA $2006             ; Se carga la parte alta de $2000
+00017Ar 1  A9 00          LDA #$00
+00017Cr 1  8D 06 20       STA $2006             ; Se carga la parte baja de $2000
+00017Fr 1  A2 00          LDX #$00              ;
+000181r 1               
+000181r 1               
+000181r 1                 ;;El SCORE se muestra en las posiciones $65 y $66 asi que cargamos
+000181r 1                 ;;el mapa hasta esas posiciones y luego cargamos a mano el score
+000181r 1               LoadBackgroundLoopScore:
+000181r 1  BD rr rr       LDA NewWorld, x
+000184r 1  8D 07 20       STA $2007
+000187r 1  E8             INX
+000188r 1  E0 65          CPX #$65  ;;Mientras no cargue $65 que siga
+00018Ar 1  D0 F5          BNE LoadBackgroundLoopScore
+00018Cr 1                  ;;Ahora que cargo los primeros $65 tiles, viene el score
+00018Cr 1  A5 rr          LDA Puntos1
+00018Er 1  8D 07 20       STA $2007
+000191r 1  A5 rr          LDA Puntos0
+000193r 1  8D 07 20       STA $2007
+000196r 1                 ;;Listo
+000196r 1  60             RTS
+000197r 1               
+000197r 1               ;;Grabamos la cancion LSD (Lucy in the Sky with Diamonds)
+000197r 1               LSD:
+000197r 1  04 0C 09 0C      .byte NE4, 12, NA4, 12, NE5, 12, NG4, 12, NE5, 12, NA4, 12, NF4b, 12,NA4, 12, NE5, 12, NF4, 10, ND5, 8, NC5b,8, NA4, 8  ,$FF
+00019Br 1  10 0C 07 0C  
+00019Fr 1  10 0C 09 0C  
+0001B2r 1               
+0001B2r 1               ;;Esta subrutina reproduce nota a nota la cancion LSD
+0001B2r 1               SUBPlayLSD:
+0001B2r 1  48               PHA
+0001B3r 1                   ;;Primero vemos si la cancion esta activa
+0001B3r 1  A5 rr            LDA LSDPlaying
+0001B5r 1  F0 52            BEQ finPlayLSD ;;No esta sonando
+0001B7r 1                   ;;Si esta sonando, tenemos que verificar que el tiempo de nota
+0001B7r 1                   ;;no haya llegando a cero
+0001B7r 1  A5 rr            LDA LSDNoteTime
+0001B9r 1                   ;;Si no es cero, entonces lo dejamos
+0001B9r 1  D0 32            BNE decNota
+0001BBr 1                   ;;Si el tiempo de nota es cero, avanzamos a la siguiente nota
+0001BBr 1  A9 BF            LDA #%10111111 ;;Configuramos el Pulse1 para que toque constante
+0001BDr 1  8D 00 40     	STA $4000	   ;;a maximo volumen
+0001C0r 1               
+0001C0r 1                   ;;Buscamos la nota que hay que tocar
+0001C0r 1  A6 rr            LDX LSDNote ;; Esta variable apunta a LSD
+0001C2r 1  BD rr rr         LDA LSD,x ;; Carga el elemento X del vector LSD
+0001C5r 1  C9 FF            CMP #$FF ;;Si es el ultimo apago la musica
+0001C7r 1  F0 28            BEQ apagaLSD
+0001C9r 1                   ;;Si no es la ultima nota, la buscamos en NOTAS
+0001C9r 1  AA               TAX ;;El indice para buscar en el vector notas esta en A, lo
+0001CAr 1               		;;pasamos a X para usarlo en modo indexado
+0001CAr 1  BD rr rr         LDA NOTAS,x ;Ahora buscamos NOTAS[x] siendo X el LSDNote
+0001CDr 1  8D 02 40         STA $4002
+0001D0r 1                   ;;Las primeras 8 notas requieren un 1 en $4003, pero el resto no
+0001D0r 1  A9 00            LDA #0 ;;Cargamos un 0 originalmente y le sumamos 1 si hace falta
+0001D2r 1  E0 08            CPX #8
+0001D4r 1  10 02            BPL altaCero ;;Si  la nota es mayor a 8, dejamos el 0
+0001D6r 1  A9 01            LDA #1 ;;Sino ponemos un 1
+0001D8r 1               altaCero:
+0001D8r 1  8D 03 40     	STA $4003 ;;Guardamos la parte alta que puede ser 0 o 1.
+0001DBr 1                   ;;Cargamos ahora el tiempo que debe durar la nota
+0001DBr 1  E6 rr            INC LSDNote
+0001DDr 1  A6 rr            LDX LSDNote
+0001DFr 1  BD rr rr         LDA LSD,x
+0001E2r 1  85 rr            STA LSDNoteTime
+0001E4r 1                   ;;Apuntamos a la siguiente nota
+0001E4r 1  E6 rr            INC LSDNote
+0001E6r 1                   ;;Cambiamos el color del cielo
+0001E6r 1  E6 rr            INC LSDSky
+0001E8r 1  20 rr rr         JSR SUBChangeSky
+0001EBr 1                   ;;Restauramos A y volvemos
+0001EBr 1  68               PLA
+0001ECr 1  60               RTS
+0001EDr 1               ;; Si el tiempo nota no llego a 0, decrementamos el tiempo y salimos
+0001EDr 1               decNota:
+0001EDr 1  C6 rr        	DEC LSDNoteTime
+0001EFr 1  68           	PLA
+0001F0r 1  60           	RTS
+0001F1r 1               ;; Si tenemos que apagar la musica, ponemos 0 en PULSE1 en PPU
+0001F1r 1               apagaLSD:
+0001F1r 1  A9 00        	LDA #0
+0001F3r 1  8D 00 40     	STA $4000
+0001F6r 1  8D 02 40     	STA $4002
+0001F9r 1  8D 03 40     	STA $4003
+0001FCr 1               	;;Reseteamos el tiempo de nota a 0 y apuntamos el vector de nota
+0001FCr 1               	;;a la primer nota y apagamos la musica.
+0001FCr 1  85 rr        	STA LSDNoteTime
+0001FEr 1  85 rr        	STA LSDNote
+000200r 1  85 rr        	STA LSDPlaying
+000202r 1               	;;Restauramos el cielo al color normal.
+000202r 1  A9 21        	LDA #$21
+000204r 1  85 rr        	STA LSDSky
+000206r 1  20 rr rr     	JSR SUBChangeSky
+000209r 1                   ;;Se termino
+000209r 1               finPlayLSD:
+000209r 1  68               PLA
+00020Ar 1  60           	RTS
+00020Br 1               
+00020Br 1               
+00020Br 1               ;;Esta subrutina incrementa el score en 1. Pero como se muestra en dos
+00020Br 1               ;;digitos entonces hay que incrementar el primero y luego el segundo
+00020Br 1               ;;dependiendo del valor del primer digito
+00020Br 1               SUBIncrementarScore:
+00020Br 1  E6 rr            INC Puntos0
+00020Dr 1  A5 rr            LDA Puntos0
+00020Fr 1  C9 0A            CMP #10
+000211r 1  F0 01            BEQ overPuntos0
+000213r 1  60               RTS
+000214r 1               overPuntos0:
+000214r 1  A9 00        	LDA #0
+000216r 1  85 rr        	STA Puntos0
+000218r 1  E6 rr        	INC Puntos1
+00021Ar 1  A5 rr        	LDA Puntos1
+00021Cr 1  C9 0A        	CMP #10
+00021Er 1  F0 01        	BEQ overPuntos1
+000220r 1  60           	RTS
+000221r 1               overPuntos1:
+000221r 1  A9 00        	LDA #0
+000223r 1  85 rr        	STA Puntos1
+000225r 1  85 rr            STA Puntos0
+000227r 1  60               RTS
+000228r 1               
+000228r 1               
+000228r 1               SUBVerificarCostado:
+000228r 1               	;;Esta subrutina verifica si mario se puede mover hacia un costado
+000228r 1               	;;Dependiendo si se apreto derecha o izquierda
+000228r 1               	;;Si el acumulador tiene 0, verifica derecha
+000228r 1               	;;Si el acumulador tiene 1 , verifica izquierda
+000228r 1  F0 12        	BEQ verificaDerecha
+00022Ar 1               	;;Limpiamos TileCount para contar colisiones
+00022Ar 1  A9 00        	LDA #$00
+00022Cr 1  85 rr        	STA TileCount
+00022Er 1               	;;Para verificar a la izquierda, tenemos que ver si hay un tile
+00022Er 1               	;;en MarioOffsetX-1 con ambos MarioOffsetY y MarioOffsetY
+00022Er 1  A5 rr        	LDA MarioOffsetX
+000230r 1  18           	CLC
+000231r 1  E9 01        	SBC #1
+000233r 1  85 rr        	STA FindTileX
+000235r 1  A5 rr        	LDA MarioOffsetY
+000237r 1  85 rr        	STA FindTileY
+000239r 1  4C rr rr     	JMP detectarColision
 00023Cr 1               
-00023Cr 1                 ;;Ahora ya avanzamos en el vector de 32x30 tantas filas como tiles
-00023Cr 1                 ;;en Y hacian falta, asi que tenemos que dividir la posicion X
-00023Cr 1                 ;;en 8 y usar eso como indice
-00023Cr 1  18             clc
-00023Dr 1  A5 rr          lda FindTileX
-00023Fr 1  E9 01          SBC #1
-000241r 1  4A             lsr
-000242r 1  4A             lsr
-000243r 1  4A             lsr
-000244r 1  A8             tay
-000245r 1               
-000245r 1                 ;Ahora NameTablePointer tiene NewWorld avanzando en Y, necesitamos
-000245r 1                 ;resolver X que ya esta dividido por 8 en el registro Y. Asi que lo
-000245r 1                 ;usamos como indice apuntando indirecto indexado con NameTablePointer
-000245r 1  B1 rr          lda (NameTablePointer), y
-000247r 1                 ;;Listo, en el acumulador quedo el TILE apuntado por FindTileX e Y.
-000247r 1  60             RTS
-000248r 1               
-000248r 1               
-000248r 1               ;;Esta subrutina se fija si mario tiene algun lugar donde estar apoyado
-000248r 1               ;;caso contrario lo hace caer por gravedad
-000248r 1               SUBAplicarGravedad:
-000248r 1               	;;Verifica si mario no tiene nada debajo de sus pies y debe caer
-000248r 1               	;; SALVO que este subiendo
-000248r 1  A9 00        	LDA #$00
-00024Ar 1  85 rr        	STA TileCount
-00024Cr 1  A5 rr        	LDA MarioEstadoSalto
-00024Er 1  29 80        	AND #%10000000
-000250r 1  D0 32        	BNE chauGravedad ;; Esta saltando
-000252r 1               	;; Verificamos que no haya nada debajo en los dos extremos
-000252r 1               
-000252r 1  18           	CLC
-000253r 1  A5 rr        	LDA MarioOffsetY
-000255r 1  69 12        	ADC #18
-000257r 1  85 rr        	STA FindTileY
-000259r 1  A5 rr        	LDA MarioOffsetX
-00025Br 1  85 rr        	STA FindTileX
-00025Dr 1  20 rr rr     	JSR SUBFindTile
-000260r 1               	;;Ahora A tiene el tile a abajo
-000260r 1  C9 3F        	CMP #$3F
-000262r 1  10 02        	BPL nadaX
-000264r 1  E6 rr        	INC TileCount
-000266r 1               nadaX:
-000266r 1  18           	CLC
-000267r 1  A5 rr        	LDA MarioOffsetX
-000269r 1  69 10        	ADC #16
-00026Br 1  85 rr        	STA FindTileX
-00026Dr 1  20 rr rr     	JSR SUBFindTile
-000270r 1  C9 3F        	CMP #$3F
-000272r 1  10 02        	BPL finGravedad
-000274r 1  E6 rr        	INC TileCount
-000276r 1               
-000276r 1               finGravedad:
-000276r 1  A5 rr           LDA TileCount
-000278r 1  C9 02           CMP #$02
-00027Ar 1  D0 08           BNE chauGravedad
-00027Cr 1  E6 rr           INC MarioOffsetY
-00027Er 1  E6 rr           INC MarioOffsetY
-000280r 1  A9 40           LDA #%01000000
-000282r 1  85 rr           STA MarioEstadoSalto ;;Mario esta cayendo
-000284r 1               chauGravedad:
-000284r 1  60              RTS
-000285r 1               
-000285r 1               SUBActualizaEstadoMario:
-000285r 1               	;; Esta subrutina actualiza el estado de mario segun su posicion
-000285r 1               	;; o si esta saltando o cayendo.
-000285r 1  A9 00        	LDA #$00
-000287r 1  85 rr        	STA MarioEstadoSprite ;;Primero borramos el estado del sprite
-000289r 1               
-000289r 1               	;;Verificamos a que lado apuntaba mario por ultima vez
-000289r 1  A5 rr        	LDA MarioUltimoLado
-00028Br 1  D0 12        	BNE miraIzquierda
-00028Dr 1               miraDerecha:
-00028Dr 1               	;;Vemos si esta saltando
-00028Dr 1  A5 rr        	LDA MarioEstadoSalto
-00028Fr 1  F0 24        	BEQ estadoSegunPosicion
-000291r 1               	;;Esta saltando a la derecha
-000291r 1               	;; Puede que este cayendo
-000291r 1  29 40        	AND #%01000000
-000293r 1  D0 05        	BNE cayendoGravedadDerecha
-000295r 1  A9 05        	LDA #$05 ;;Si no cae ni salta y esta quieto, entoces mira derecha
-000297r 1  85 rr        	STA MarioEstadoSprite
-000299r 1  60           	RTS
-00029Ar 1               cayendoGravedadDerecha:
-00029Ar 1  A9 03            LDA #$03 ;;Si esta cayendo por gravedad, manitos juntas
-00029Cr 1  85 rr            STA MarioEstadoSprite
-00029Er 1  60               RTS
-00029Fr 1               miraIzquierda:
-00029Fr 1  A5 rr            LDA MarioEstadoSalto
-0002A1r 1  F0 0E            BEQ preEstadoSegunPosicion
-0002A3r 1                   ;;Puede que este cayendo
-0002A3r 1  29 40            AND #%01000000
-0002A5r 1  D0 05            BNE cayendoGravedadIzquierda
-0002A7r 1  A9 85            LDA #$85 ;;Si no cae ni salta y esta quiero, entonces mira izquierda
-0002A9r 1  85 rr            STA MarioEstadoSprite
-0002ABr 1  60               RTS
-0002ACr 1               cayendoGravedadIzquierda:
-0002ACr 1  A9 83        	LDA #$83 ;; Si esta cayendo por gravedad, manitos juntas
-0002AEr 1  85 rr        	STA MarioEstadoSprite
-0002B0r 1  60           	RTS
-0002B1r 1               
-0002B1r 1               ;;El estado de mario depende entonces de la posicion en donde esta
-0002B1r 1               ;;en pantalla
-0002B1r 1               preEstadoSegunPosicion:
-0002B1r 1  A9 80            LDA #$80
-0002B3r 1  85 rr            STA MarioEstadoSprite ;; Sumo $80 de base ya que es izquierda
-0002B5r 1               
-0002B5r 1               estadoSegunPosicion:
-0002B5r 1               	;; Esta quieto mario?
-0002B5r 1  A5 rr        	LDA JoystickPress
-0002B7r 1               	;;enmascaro con LeftRight a ver si se mueve
-0002B7r 1  29 03        	AND #%00000011
-0002B9r 1  D0 08        	BNE realPosicion ;;Efectivamente se esta apretando algun boton
-0002BBr 1               				     ;;del joystick asi que vamos al estado basado
-0002BBr 1               				     ;;en la posicion de la pantalla
-0002BBr 1  18           	CLC
-0002BCr 1  A5 rr        	LDA MarioEstadoSprite
-0002BEr 1  69 04        	ADC #$04
-0002C0r 1  85 rr        	STA MarioEstadoSprite
-0002C2r 1  60           	RTS
-0002C3r 1               realPosicion:
-0002C3r 1               	;;Tomo la posicion X
-0002C3r 1  18           	CLC
-0002C4r 1  A5 rr        	LDA MarioOffsetX
-0002C6r 1  29 18        	AND #%00011000
-0002C8r 1               	;;Dividimos por 8 y tomamos solo dos bits (4 estados posibles)
-0002C8r 1  4A           	LSR
-0002C9r 1  4A           	LSR
-0002CAr 1  4A           	LSR
-0002CBr 1  65 rr        	ADC MarioEstadoSprite
-0002CDr 1  85 rr        	STA MarioEstadoSprite
-0002CFr 1               	;;Entonces guardamos el estado en funcion de la coordenada X.
-0002CFr 1  60              RTS
-0002D0r 1               
-0002D0r 1               
-0002D0r 1               ;;Esta rutina detecta si dos Sprites estan colisionando.
-0002D0r 1               ;;Codigo tomado de:
-0002D0r 1               ;;https://refreshgames.co.uk/2018/01/27/nes-asm-tips-box-collision/
-0002D0r 1               ;;Y adaptado a sprite fijo (hongo) y sprite movil (mario)
-0002D0r 1               SUBDetectCollisions:
-0002D0r 1  48           	PHA ; Guarda el acumulador en el stack
-0002D1r 1  A9 00        	LDA #$00
-0002D3r 1  85 rr        	STA SpriteChoca ;Inicializa SpriteChoca en 0 asumiendo que no choca
-0002D5r 1               ; Verifica primer caso
-0002D5r 1  18           	CLC
-0002D6r 1  A5 rr        	LDA MarioOffsetX ;Toma coordenada de MarioX
-0002D8r 1  69 10        	ADC #16 ; Dado que tiene 16 de ancho se lo suma
-0002DAr 1  C9 40        	CMP #HONGOX ; Compara con el comienzo del hongo
-0002DCr 1  30 1F        	BMI FinishCollisionCheckBetter ;Si es menor, no puede estar chocando
-0002DEr 1               
-0002DEr 1               ; Verifica segundo caso
-0002DEr 1  18           	CLC
-0002DFr 1  A9 40        	LDA #HONGOX ;Carga coordenada del hongo X
-0002E1r 1  69 10        	ADC #16 ; Dado que el hongo es de 16 de ancho, los suma
-0002E3r 1  C5 rr        	CMP MarioOffsetX ; Comparo contra el comienzo de mario en X
-0002E5r 1  30 16        	BMI FinishCollisionCheckBetter ;Si es menor, no puede estar chocando
-0002E7r 1               
-0002E7r 1               ; Verifica tercer caso
-0002E7r 1  18           	CLC
-0002E8r 1  A5 rr        	LDA MarioOffsetY ; Carga la posicion de MArioY
-0002EAr 1  69 10        	ADC #16 ; dado que es de 16 de alto, se los suma
-0002ECr 1  C9 4C        	CMP #HONGOY ; compara con la posicion Y del hongo
-0002EEr 1  30 0D        	BMI FinishCollisionCheckBetter ;Si es menor, no puede estar chocando
-0002F0r 1               
-0002F0r 1               ; Ultimo caso
-0002F0r 1  18           	CLC
-0002F1r 1  A9 4C        	LDA #HONGOY ; Carga la posicion Y del hongo
-0002F3r 1  69 10        	ADC #16 ; Dado que tiene 16 de alto se los suma
-0002F5r 1  C5 rr        	CMP MarioOffsetY ; Compara con la posicion Y de mario
-0002F7r 1  30 04        	BMI FinishCollisionCheckBetter ;Si es menor, no puede estar chocando
-0002F9r 1               
-0002F9r 1               ;SI llego hasta aca sin saltar, quiere decir que hay colision
-0002F9r 1  A9 01        	LDA #$01
-0002FBr 1  85 rr        	STA SpriteChoca
-0002FDr 1               
-0002FDr 1               FinishCollisionCheckBetter:
-0002FDr 1  68           	PLA ; Restaura el valor de A del stack
-0002FEr 1               
-0002FEr 1  60           	RTS
-0002FFr 1               
-0002FFr 1               
-0002FFr 1               ;;Esta rutina verifica que pasa con el hongo y si hay choque
-0002FFr 1               ;;usando la rutina de arriba como auxiliar
-0002FFr 1               SUBCheckColisionHongo:
-0002FFr 1  A5 rr        	LDA HongoVisible
-000301r 1  F0 15        	BEQ finCheckColisionHongo
-000303r 1               	;;Hay que comparar donde esta mario con los limites del hongo
-000303r 1  20 rr rr     	JSR SUBDetectCollisions
-000306r 1  A5 rr        	LDA SpriteChoca
-000308r 1  F0 0E        	BEQ finCheckColisionHongo ;;No esta chocando con el hongo
-00030Ar 1               	;;Aca si esta chocando, asi que si el hongo esta visible
-00030Ar 1               	;;lo ocultamos
-00030Ar 1  A9 00        	LDA #0
-00030Cr 1  85 rr        	STA HongoVisible
-00030Er 1               	;;Sumamos un puntito
-00030Er 1  20 rr rr     	JSR SUBIncrementarScore
-000311r 1               	;;Refrezcamos el hongo en pantalla (no se muestra mas)
-000311r 1  20 rr rr     	JSR SUBDisplayHongo
-000314r 1               	;;Tocamos LSD
-000314r 1  A9 01        	LDA #1
-000316r 1  85 rr        	STA LSDPlaying
-000318r 1               finCheckColisionHongo:
-000318r 1  60               RTS
-000319r 1               
-000319r 1               ;;Esta rutina muestra el hongo en pantalla dependiendo de si
-000319r 1               ;;la variable HongoVisible esta en 1 o 0.
-000319r 1               SUBDisplayHongo:
-000319r 1  A5 rr        	LDA HongoVisible
-00031Br 1  D0 0F        	BNE dibujalo
-00031Dr 1               	;;Si no esta visible, lo dibujamos fuera de pantalla
-00031Dr 1  A9 FF        	LDA #$FF
-00031Fr 1  8D 20 02     	STA $0220
-000322r 1  8D 24 02     	STA $0224
-000325r 1  8D 28 02         STA $0228
-000328r 1  8D 2C 02         STA $022C
-00032Br 1  60           	RTS
-00032Cr 1               ;;Si esta visible, entonces los dibujamos en coordenadas fijas
-00032Cr 1               dibujalo:
-00032Cr 1  18             CLC
-00032Dr 1  A9 4C          LDA #76
-00032Fr 1  8D 20 02       STA $0220
-000332r 1  18             clc
-000333r 1  A9 40          LDA #64
-000335r 1  8D 23 02       STA $0223
-000338r 1  A9 76          LDA #$76
-00033Ar 1  8D 21 02       STA $0221
-00033Dr 1  A9 01          LDA #$01
-00033Fr 1  8D 22 02       STA $0222
-000342r 1               
-000342r 1                 ;Seguimos con UpperRight UR
-000342r 1  18             clc
-000343r 1  A9 4C          LDA #76
-000345r 1  8D 24 02       STA $0224
-000348r 1  18             clc
-000349r 1  A9 48          LDA #72
-00034Br 1  8D 27 02       STA $0227
-00034Er 1  A9 77          LDA #$77
-000350r 1  8D 25 02       STA $0225
-000353r 1  A9 01          LDA #$01
-000355r 1  8D 26 02       STA $0226
-000358r 1               
-000358r 1                 ;Seguimos con LowerLeft LL
-000358r 1  18             clc
-000359r 1  A9 54          LDA #84
-00035Br 1  8D 28 02       STA $0228
-00035Er 1  18             clc
-00035Fr 1  A9 40          LDA #64
-000361r 1  8D 2B 02       STA $022B
-000364r 1  A9 78          LDA #$78
-000366r 1  8D 29 02       STA $0229
-000369r 1  A9 01          LDA #$01
-00036Br 1  8D 2A 02       STA $022A
-00036Er 1               
-00036Er 1                 ;Ultimo con lowerRight LR
-00036Er 1  18             clc
-00036Fr 1  A9 54          LDA #84
-000371r 1  8D 2C 02       STA $022C
-000374r 1  18             clc
-000375r 1  A9 48          LDA #72
-000377r 1  8D 2F 02       STA $022F
-00037Ar 1  A9 79          LDA #$79
-00037Cr 1  8D 2D 02       STA $022D
-00037Fr 1  A9 01          LDA #$01
-000381r 1  8D 2E 02       STA $022E
-000384r 1               
-000384r 1  60             RTS
-000385r 1               
-000385r 1               
-000385r 1               ;;Esta rutina se fija si mario choca algo con la cabeza
-000385r 1               ;;En caso de ser un BOX ? , entonces muestra el hongo
-000385r 1               SUBCheckCabeza:
-000385r 1               	;; Esta rutina se fija que no haya nada arriba de la cabeza a mario
-000385r 1  18           	CLC
-000386r 1  A5 rr        	LDA MarioOffsetY
-000388r 1  E9 01        	SBC #1
-00038Ar 1  85 rr        	STA FindTileY
-00038Cr 1  A9 00        	LDA #0
-00038Er 1  85 rr        	STA TileCount
-000390r 1  A5 rr        	LDA MarioOffsetX
-000392r 1  85 rr        	STA FindTileX
-000394r 1  20 rr rr     	JSR SUBFindTile
-000397r 1               	;; Si hay un $55 o $56 hay un BOX
-000397r 1               	;; Si arriba hay algo mayor a $3F sumo
-000397r 1  C9 3F        	CMP #$3F
-000399r 1  30 0E        	BMI checkCabeza2
-00039Br 1  E6 rr        	INC TileCount
-00039Dr 1  C9 55        	CMP #$55
-00039Fr 1  D0 02        	BNE checkOtroQuestion
-0003A1r 1  E6 rr        	INC HongoVisible
-0003A3r 1               checkOtroQuestion:
-0003A3r 1  C9 56            CMP #$56
-0003A5r 1  D0 02            BNE checkCabeza2
-0003A7r 1  E6 rr            INC HongoVisible
-0003A9r 1               checkCabeza2:
-0003A9r 1  18           	CLC
-0003AAr 1  A5 rr        	LDA FindTileX
-0003ACr 1  69 10        	ADC #16
-0003AEr 1  85 rr        	STA FindTileX
-0003B0r 1  20 rr rr     	JSR SUBFindTile
-0003B3r 1  C9 3F        	CMP #$3F
-0003B5r 1  30 0E        	BMI finCheckCabeza
-0003B7r 1  E6 rr            INC TileCount
-0003B9r 1  C9 55        	CMP #$55
-0003BBr 1  D0 02        	BNE checkOtroQuestion1
-0003BDr 1  E6 rr        	INC HongoVisible
-0003BFr 1               checkOtroQuestion1:
-0003BFr 1  C9 56            CMP #$56
-0003C1r 1  D0 02            BNE finCheckCabeza
-0003C3r 1  E6 rr            INC HongoVisible
-0003C5r 1               finCheckCabeza:
-0003C5r 1  A5 rr            LDA TileCount
-0003C7r 1  60               RTS
-0003C8r 1               
-0003C8r 1               ;;Esta rutina se fija si mario esta saltando y procesa el salto.
-0003C8r 1               SUBCheckSalto:
-0003C8r 1                   ;;No puede haber gravedad aun, ya que se resetea cada vez que se
-0003C8r 1                   ;; dibuja  a mario
-0003C8r 1                   ;; El BMS de MArioEstadoSalto indica si esta saltando o no
-0003C8r 1  A5 rr            LDA MarioEstadoSalto
-0003CAr 1  29 80            AND #%10000000
-0003CCr 1  F0 52            BEQ finCheckSalto
-0003CEr 1                   ;;Dado que MarioEstadoSalto tiene 10xxxxxx
-0003CEr 1                   ;;podemos vemos si subimos o bajamos
-0003CEr 1  A5 rr            LDA MarioEstadoSalto
-0003D0r 1  C9 97            CMP #%10010111
-0003D2r 1  10 15            BPL Bajando
-0003D4r 1                   ;;Si estoy aca es porque esta subiendo con el salto
-0003D4r 1  E6 rr            INC MarioEstadoSalto
-0003D6r 1                   ;;HAy que verificar que no haya nada en la cabeza de mario
-0003D6r 1  20 rr rr         JSR SUBCheckCabeza
-0003D9r 1                   ;;Si devolvio 0 es que se puede saltar
-0003D9r 1  D0 0A            BNE ChocoCabeza
-0003DBr 1  18               CLC
-0003DCr 1  A5 rr            LDA MarioOffsetY
-0003DEr 1  E9 02            SBC #2
-0003E0r 1  85 rr            STA MarioOffsetY
-0003E2r 1  4C rr rr         JMP finCheckSalto
-0003E5r 1               
-0003E5r 1               ChocoCabeza:
-0003E5r 1                   ;;Como choco la cabeza paramos de subir
-0003E5r 1  A9 9F            LDA #%10011111
-0003E7r 1  85 rr            STA MarioEstadoSalto
-0003E9r 1               
-0003E9r 1               Bajando:
-0003E9r 1               	;; SI esta bajando, tenemos que bajar hasta que choca con algo
-0003E9r 1               	;; entonces copiamos la rutina que verifica por gravedad
-0003E9r 1  A9 00        	LDA #0
-0003EBr 1  85 rr        	STA TileCount
-0003EDr 1  18           	CLC
-0003EEr 1  A5 rr        	LDA MarioOffsetY
-0003F0r 1  69 12        	ADC #18
-0003F2r 1  85 rr        	STA FindTileY
-0003F4r 1  A5 rr        	LDA MarioOffsetX
-0003F6r 1  85 rr        	STA FindTileX
-0003F8r 1  20 rr rr     	JSR SUBFindTile
-0003FBr 1               	;;Ahora A tiene el tile a abajo
-0003FBr 1  C9 3F        	CMP #$3F
-0003FDr 1  10 02        	BPL nadaXcayendo
-0003FFr 1  E6 rr        	INC TileCount
-000401r 1               nadaXcayendo:
-000401r 1  18           	CLC
-000402r 1  A5 rr        	LDA MarioOffsetX
-000404r 1  69 10        	ADC #16
-000406r 1  85 rr        	STA FindTileX
-000408r 1  20 rr rr     	JSR SUBFindTile
-00040Br 1  C9 3F        	CMP #$3F
-00040Dr 1  10 02        	BPL finCayendo
-00040Fr 1  E6 rr        	INC TileCount
-000411r 1               
-000411r 1               finCayendo:
-000411r 1  A5 rr           LDA TileCount
-000413r 1  C9 02           CMP #$02
-000415r 1  D0 05           BNE impactoSuelo
-000417r 1  E6 rr           INC MarioOffsetY
-000419r 1  E6 rr           INC MarioOffsetY
-00041Br 1  60              RTS
-00041Cr 1               
-00041Cr 1               impactoSuelo:
-00041Cr 1                  ;;No cae mas
-00041Cr 1  A9 00           LDA #$00
-00041Er 1  85 rr           STA MarioEstadoSalto
-000420r 1               
-000420r 1               finCheckSalto:
-000420r 1  60               RTS
-000421r 1               
-000421r 1               
-000421r 1               ;;Esta es la rutina principal que actualiza todos los Sprites.
-000421r 1               SUBDibujaMario:
-000421r 1               	;; Primero reseteo el flag de cayendo por gravedad
-000421r 1               	;; ya que  lo vamos a chequear siempre despues de ver si esta
-000421r 1               	;; saltando o no.
-000421r 1  A5 rr        	LDA MarioEstadoSalto
-000423r 1  29 BF        	AND #%10111111
-000425r 1  85 rr        	STA MarioEstadoSalto
-000427r 1               	;; Primero vemos si esta saltando
-000427r 1  20 rr rr     	JSR SUBCheckSalto
-00042Ar 1               	;; Ahora que ya sabemos si salta o no, vemos si se cae por gravedad
-00042Ar 1  20 rr rr     	JSR SUBAplicarGravedad
-00042Dr 1               
-00042Dr 1               	;;Dado que la posicion X, Y ya esta actualizada podemos actualizar
-00042Dr 1               	;;como se dibuja mario en pantalla
-00042Dr 1  20 rr rr     	JSR SUBActualizaEstadoMario
-000430r 1               	;;Vemos si choco con el hongo y lo mostramos
-000430r 1  20 rr rr     	JSR SUBCheckColisionHongo
-000433r 1  20 rr rr     	JSR SUBDisplayHongo
-000436r 1               
-000436r 1               	;; Ahora que su estado esta actualizado podemos dibujarlo.
-000436r 1               	;; Apuntamos a donde estan los sprites relativos al estado
-000436r 1               	;; y buscamos los mismos con la variable de estado.
-000436r 1  A5 rr        	LDA MarioEstadoSprite
-000438r 1  C9 70        	CMP #$70
-00043Ar 1  10 0B        	BPL parteIzquierda
-00043Cr 1  A9 rr            LDA #<dbEstadoMario00
-00043Er 1  85 rr            STA MarioEstadoSpritedb
-000440r 1  A9 rr            LDA #>dbEstadoMario00
-000442r 1  85 rr            STA MarioEstadoSpritedb+1
-000444r 1  4C rr rr         JMP sumarBajo
-000447r 1               parteIzquierda:
-000447r 1  A9 rr            LDA #<dbEstadoMario80
-000449r 1  85 rr            STA MarioEstadoSpritedb
-00044Br 1  A9 rr            LDA #>dbEstadoMario80
-00044Dr 1  85 rr            STA MarioEstadoSpritedb+1
-00044Fr 1               
-00044Fr 1               sumarBajo:
-00044Fr 1  A5 rr            LDA MarioEstadoSprite
-000451r 1  29 0F            AND #$0F
-000453r 1  0A               asl
-000454r 1  0A               asl
-000455r 1  0A               asl
-000456r 1  65 rr            ADC MarioEstadoSpritedb
-000458r 1  85 rr            STA MarioEstadoSpritedb
-00045Ar 1  90 02            BCC actualizaSprite
-00045Cr 1  E6 rr            INC MarioEstadoSpritedb+1
-00045Er 1               
-00045Er 1               ;; Ahora MarioEstadoSpritedb apunta a un vector que tiene
-00045Er 1               ;; todos los valores para los sprites
-00045Er 1               ;; Cada parte de mario (UL, UR, LL, LR) necesita un valor de sprite
-00045Er 1               ;; y un atributo asi que cargamos los 8 valores
-00045Er 1               actualizaSprite:
-00045Er 1  A0 00            LDY #0
-000460r 1  B1 rr            lda (MarioEstadoSpritedb), y
-000462r 1  8D 11 02         STA $0211
-000465r 1  C8               INY
-000466r 1  B1 rr            LDA (MarioEstadoSpritedb), y
-000468r 1  8D 19 02         STA $0219
-00046Br 1  C8               INY
-00046Cr 1  B1 rr            LDA (MarioEstadoSpritedb), y
-00046Er 1  8D 15 02         STA $0215
-000471r 1  C8               INY
-000472r 1  B1 rr            LDA (MarioEstadoSpritedb), y
-000474r 1  8D 1D 02         STA $021D
-000477r 1  C8               INY
-000478r 1  B1 rr            LDA (MarioEstadoSpritedb), y
-00047Ar 1  8D 12 02         STA $0212
-00047Dr 1  C8               INY
-00047Er 1  B1 rr            LDA (MarioEstadoSpritedb), y
-000480r 1  8D 1A 02         STA $021A
-000483r 1  C8               INY
-000484r 1  B1 rr            LDA (MarioEstadoSpritedb), y
-000486r 1  8D 16 02         STA $0216
-000489r 1  C8               INY
-00048Ar 1  B1 rr            LDA (MarioEstadoSpritedb), y
-00048Cr 1  8D 1E 02         STA $021E
-00048Fr 1                   ;;Ahora que ya se cargo como se dibuja mario le decimos en donde
-00048Fr 1                   ;;Lo tiene que dibujar (cada parte)
-00048Fr 1  18               CLC
-000490r 1  A5 rr            LDA MarioOffsetY
-000492r 1  8D 10 02         STA $0210
-000495r 1  8D 18 02         STA $0218
-000498r 1  69 08            ADC #$08
-00049Ar 1  8D 14 02         STA $0214
-00049Dr 1  8D 1C 02         STA $021C
-0004A0r 1               
-0004A0r 1  18               CLC
-0004A1r 1  A5 rr            LDA MarioOffsetX
-0004A3r 1  8D 13 02         STA $0213
-0004A6r 1  8D 17 02         STA $0217
-0004A9r 1  69 08            ADC #$08
-0004ABr 1  8D 1B 02         STA $021B
-0004AEr 1  8D 1F 02         STA $021F
-0004B1r 1               
-0004B1r 1  60           	RTS
-0004B2r 1               
-0004B2r 1               ;;Tabla de estados de mario. Guarda primero el numero de sprite
-0004B2r 1               ;; y luego guarda el atributo correspondiente
-0004B2r 1               
-0004B2r 1               dbEstadoMario00: ;Moviendose Derecha etapa 0 (manos separadas)
-0004B2r 1                         ;UL, UR, LL, LR,UL,UR,LL, LR
-0004B2r 1  36 37 38 39  	.byte $36,$37,$38,$39,$0,$0,$0,$0
-0004B6r 1  00 00 00 00  
-0004BAr 1               dbEstadoMario01: ;Moviendose Derecha etapa 1 (manos juntas)
-0004BAr 1                         ;UL, UR, LL, LR,UL,UR,LL, LR
-0004BAr 1  3A 37 3B 3C  	.byte $3A,$37,$3B,$3C,$0,$0,$0,$0
-0004BEr 1  00 00 00 00  
-0004C2r 1               dbEstadoMario02: ;Moviendose Derecha etapa 2 (mano adelante)
-0004C2r 1                         ;UL, UR, LL, LR,UL,UR,LL, LR
-0004C2r 1  32 33 34 35  	.byte $32,$33,$34,$35,$0,$0,$0,$0
-0004C6r 1  00 00 00 00  
-0004CAr 1               dbEstadoMario03: ;Moviendose Derecha etapa 3 (manos juntas)
-0004CAr 1                         ;UL, UR, LL, LR,UL,UR,LL, LR
-0004CAr 1  3A 37 3B 3C  	.byte $3A,$37,$3B,$3C,$0,$0,$0,$0
-0004CEr 1  00 00 00 00  
-0004D2r 1               dbEstadoMario04: ;Mario quieto mirando a la derecha
-0004D2r 1                         ;UL, UR, LL, LR,UL,UR,LL, LR
-0004D2r 1  32 33 4F 4F  	.byte $32,$33,$4F,$4F,$0,$0,$0,$40
-0004D6r 1  00 00 00 40  
-0004DAr 1               dbEstadoMario05: ;Salto positivo a la derecha
-0004DAr 1                         ;UL, UR, LL, LR,UL,UR,LL, LR
-0004DAr 1  32 41 42 43  	.byte $32,$41,$42,$43,$0,$0,$0,$0
-0004DEr 1  00 00 00 00  
-0004E2r 1               
-0004E2r 1               dbEstadoMario80: ;Moviendose Derecha etapa 0 (manos separadas)
-0004E2r 1                         ;UL, UR, LL, LR,UL,UR,LL, LR
-0004E2r 1  37 36 39 38  	.byte $37,$36,$39,$38,$40,$40,$40,$40
-0004E6r 1  40 40 40 40  
-0004EAr 1               dbEstadoMario81: ;Moviendose Derecha etapa 1 (manos juntas)
-0004EAr 1                         ;UL, UR, LL, LR,UL,UR,LL, LR
-0004EAr 1  37 3A 3C 3B  	.byte $37,$3A,$3C,$3B,$40,$40,$40,$40
-0004EEr 1  40 40 40 40  
-0004F2r 1               dbEstadoMario82: ;Moviendose Derecha etapa 2 (mano adelante)
-0004F2r 1                         ;UL, UR, LL, LR,UL,UR,LL, LR
-0004F2r 1  33 32 35 34  	.byte $33,$32,$35,$34,$40,$40,$40,$40
-0004F6r 1  40 40 40 40  
-0004FAr 1               dbEstadoMario83: ;Moviendose Derecha etapa 3 (manos juntas)
-0004FAr 1                         ;UL, UR, LL, LR,UL,UR,LL, LR
-0004FAr 1  37 3A 3C 3B  	.byte $37,$3A,$3C,$3B,$40,$40,$40,$40
-0004FEr 1  40 40 40 40  
-000502r 1               dbEstadoMario84: ;Mario quieto mirando a la derecha
-000502r 1                         ;UL, UR, LL, LR,UL,UR,LL, LR
-000502r 1  33 32 4F 4F  	.byte $33,$32,$4F,$4F,$40,$40,$0,$40
-000506r 1  40 40 00 40  
-00050Ar 1               dbEstadoMario85: ;Salto positivo a la derecha
-00050Ar 1                         ;UL, UR, LL, LR,UL,UR,LL, LR
-00050Ar 1  41 32 43 42  	.byte $41,$32,$43,$42,$40,$40,$40,$40
-00050Er 1  40 40 40 40  
-000512r 1               
-000512r 1               
-000512r 1               
-000512r 1               ;; Esta rutina dibuja el fondo (Background Tiles).
-000512r 1               SUBDibujaFondo:
-000512r 1  AD 02 20       LDA $2002             ; Hay que leer el PPU para resetear la posicion
-000515r 1  A9 20          LDA #$20
-000517r 1  8D 06 20       STA $2006             ; Se carga la parte alta de $2000
-00051Ar 1  A9 00          LDA #$00
-00051Cr 1  8D 06 20       STA $2006             ; Se carga la parte baja de $2000
-00051Fr 1  A2 00          LDX #$00
-000521r 1                 ;;Una pantalla entera tiene 32x30 tiles, o sea 960 bytes.
-000521r 1                 ;;Pero el registro X es de 8 bits, por ende tenemos que cargar
-000521r 1                 ;;de 256 bytes a la vez o usar modo indirecto indexado pero hay que
-000521r 1                 ;;contar con 16 bits, asi que es mas facil cargarlo por partes.
-000521r 1               
-000521r 1                 ;;Cargamos los primeros 256 bytes
-000521r 1               LoadBackgroundLoop:
-000521r 1  BD rr rr       LDA NewWorld, x
-000524r 1  8D 07 20       STA $2007              ;Grabamos el valor a PPU, que se autoincrementa
-000527r 1  E8             INX                    ; incrementamos X para el loop.
-000528r 1  E0 65          CPX #$65               ; en $65 corta para cargar el SCORE, sino sigue
-00052Ar 1  D0 F5          BNE LoadBackgroundLoop ; Mientras no haya recorrido los $65, que siga.
-00052Cr 1               
-00052Cr 1                 ;;Cargamos los puntos en el medio de los primeros 256
-00052Cr 1  A5 rr          LDA Puntos1
-00052Er 1  8D 07 20       STA $2007
-000531r 1  A5 rr          LDA Puntos0
-000533r 1  8D 07 20       STA $2007
-000536r 1  A2 67          LDX #$67
-000538r 1               
-000538r 1               LoadBackgroundLoopPos:
-000538r 1  BD rr rr       LDA NewWorld, x
-00053Br 1  8D 07 20       STA $2007
-00053Er 1  E8             INX
-00053Fr 1  E0 00          CPX #$00
-000541r 1  D0 F5          BNE LoadBackgroundLoopPos ;Si no llego a 00, no termino aun.
-000543r 1               
-000543r 1                 ;;Todos los loops son mas o menos iguales
-000543r 1                 ;; pero con el offset avanzado en 256
-000543r 1               
-000543r 1               LoadBackgroundLoop256:
-000543r 1  BD rr rr       LDA NewWorld+256, x
-000546r 1  8D 07 20       STA $2007
-000549r 1  E8             INX
-00054Ar 1  E0 00          CPX #$00
-00054Cr 1  D0 F5          BNE LoadBackgroundLoop256
-00054Er 1               
-00054Er 1               LoadBackgroundLoop512:
-00054Er 1  BD rr rr       LDA NewWorld+512, x
-000551r 1  8D 07 20       STA $2007
-000554r 1  E8             INX
-000555r 1  E0 00          CPX #$00
-000557r 1  D0 F5          BNE LoadBackgroundLoop512
-000559r 1               
-000559r 1                 ;;Este ultimo loop tiene que ir desde 768 hasta 960 solamente
-000559r 1               
-000559r 1               LoadBackgroundLoop192:
-000559r 1  BD rr rr       LDA NewWorld+512+256, x
-00055Cr 1  8D 07 20       STA $2007
-00055Fr 1  E8             INX
-000560r 1  E0 C0          CPX #192
-000562r 1  D0 F5          BNE LoadBackgroundLoop192
-000564r 1               
-000564r 1                ;;Este loop carga los registros de atributos que estan a continuacion de los tiles.
-000564r 1                ;;Comienza apuntando el PPU a la memoria de atributos correspondiente
-000564r 1               
-000564r 1               LoadAttribute:
-000564r 1  AD 02 20       LDA $2002
-000567r 1  A9 23          LDA #$23
-000569r 1  8D 06 20       STA $2006
-00056Cr 1  A9 C0          LDA #$C0
-00056Er 1  8D 06 20       STA $2006
-000571r 1  A2 00          LDX #$00
-000573r 1               
-000573r 1                 ;;Ahora barremos los atributos y los vamos pasando al PPU
-000573r 1               LoadAttributeLoop:
-000573r 1  BD rr rr       LDA NewWorldAttribute, x
-000576r 1  8D 07 20       STA $2007
-000579r 1  E8             INX
-00057Ar 1  E0 40          CPX #64
-00057Cr 1  D0 F5          BNE LoadAttributeLoop
-00057Er 1               
-00057Er 1                 ;;Todo listo, podemos volver
-00057Er 1  60             RTS
-00057Fr 1               
-00057Fr 1               ;;Cargamos los tiempos para el timer que genera las notas musicales
-00057Fr 1               ;;con el Pulse1 del PPU
-00057Fr 1               NOTAS:
-00057Fr 1  AB           	.byte %10101011 ;, %1
-000580r 1  93           	.byte %10010011 ;, %1
-000581r 1  7C           	.byte %01111100 ;, %1
-000582r 1  67           	.byte %01100111 ;, %1
-000583r 1  52           	.byte %01010010 ;, %1
-000584r 1  3F           	.byte %00111111 ;, %1
-000585r 1  2D           	.byte %00101101 ;, %1
-000586r 1  1C           	.byte %00011100 ;, %1
-000587r 1  0C           	.byte %00001100 ;, %1
-000588r 1  FD           	.byte %11111101 ;, %0
-000589r 1  EF           	.byte %11101111 ;, %0
-00058Ar 1  E1           	.byte %11100001 ;, %0
-00058Br 1  D5           	.byte %11010101 ;, %0
-00058Cr 1  C9           	.byte %11001001 ;, %0
-00058Dr 1  BD           	.byte %10111101 ;, %0
-00058Er 1  B3           	.byte %10110011 ;, %0
-00058Fr 1  A9           	.byte %10101001 ;, %0
-000590r 1  9F           	.byte %10011111 ;, %0
-000591r 1  96           	.byte %10010110 ;, %0
-000592r 1  8E           	.byte %10001110 ;, %0
-000593r 1  86           	.byte %10000110 ;, %0
-000594r 1  7E           	.byte %01111110 ;, %0
-000595r 1  77           	.byte %01110111 ;, %0
-000596r 1  70           	.byte %01110000 ;, %0
-000597r 1  00           	.byte $00
-000598r 1               
-000598r 1               ;;Cargamos el mapa estatico original (NameTable) con atributos
-000598r 1               NewWorld:
-000598r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-00059Cr 1  24 24 24 24  
-0005A0r 1  24 24 24 24  
-0005A8r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-0005ACr 1  24 24 24 24  
-0005B0r 1  24 24 24 24  
-0005B8r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-0005BCr 1  24 24 24 24  
-0005C0r 1  24 24 24 24  
-0005C8r 1  24 36 37 24  	.byte $24,$36,$37,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-0005CCr 1  24 24 24 24  
-0005D0r 1  24 24 24 24  
-0005D8r 1  24 24 24 19  	.byte $24,$24,$24,$19,$1e,$17,$1d,$18,$1c,$24,$24,$24,$24,$24,$24,$24
-0005DCr 1  1E 17 1D 18  
-0005E0r 1  1C 24 24 24  
-0005E8r 1  35 25 25 38  	.byte $35,$25,$25,$38,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-0005ECr 1  24 24 24 24  
-0005F0r 1  24 24 24 24  
-0005F8r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$00,$00,$24,$24,$24,$24,$24,$24,$24,$24,$24
-0005FCr 1  24 00 00 24  
-000600r 1  24 24 24 24  
-000608r 1  39 3A 3B 3C  	.byte $39,$3a,$3b,$3c,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-00060Cr 1  24 24 24 24  
-000610r 1  24 24 24 24  
-000618r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-00061Cr 1  24 24 24 24  
-000620r 1  24 24 24 24  
-000628r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-00062Cr 1  24 24 24 24  
-000630r 1  24 24 24 24  
-000638r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-00063Cr 1  24 24 24 24  
-000640r 1  24 24 24 24  
-000648r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-00064Cr 1  24 24 24 24  
-000650r 1  24 24 24 24  
-000658r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-00065Cr 1  24 24 24 24  
-000660r 1  24 24 24 24  
-000668r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-00066Cr 1  24 24 24 24  
-000670r 1  24 24 24 24  
-000678r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-00067Cr 1  24 24 24 24  
-000680r 1  24 24 24 24  
-000688r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-00068Cr 1  24 24 24 24  
-000690r 1  24 24 24 24  
-000698r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-00069Cr 1  24 24 24 24  
-0006A0r 1  24 24 24 24  
-0006A8r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-0006ACr 1  24 24 24 24  
-0006B0r 1  24 24 24 24  
-0006B8r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-0006BCr 1  24 24 24 24  
-0006C0r 1  24 24 24 24  
-0006C8r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-0006CCr 1  24 24 24 24  
-0006D0r 1  24 24 24 24  
-0006D8r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-0006DCr 1  24 24 24 24  
-0006E0r 1  24 24 24 24  
-0006E8r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-0006ECr 1  24 24 24 24  
-0006F0r 1  24 24 24 24  
-0006F8r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-0006FCr 1  24 24 24 24  
-000700r 1  24 24 24 24  
-000708r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-00070Cr 1  24 24 24 24  
-000710r 1  24 24 24 24  
-000718r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$53,$54,$24,$24,$24,$24,$24,$24
-00071Cr 1  24 24 24 24  
-000720r 1  53 54 24 24  
-000728r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$b0,$b2,$b0,$b2,$b0,$b2,$24,$24,$24,$24
-00072Cr 1  24 24 B0 B2  
-000730r 1  B0 B2 B0 B2  
-000738r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$55,$56,$24,$24,$24,$24,$24,$24
-00073Cr 1  24 24 24 24  
-000740r 1  55 56 24 24  
-000748r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$b1,$b3,$b1,$b3,$b1,$b3,$24,$24,$24,$24
-00074Cr 1  24 24 B1 B3  
-000750r 1  B1 B3 B1 B3  
-000758r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-00075Cr 1  24 24 24 24  
-000760r 1  24 24 24 24  
-000768r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-00076Cr 1  24 24 24 24  
-000770r 1  24 24 24 24  
-000778r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-00077Cr 1  24 24 24 24  
-000780r 1  24 24 24 24  
-000788r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-00078Cr 1  24 24 24 24  
-000790r 1  24 24 24 24  
-000798r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-00079Cr 1  24 24 24 24  
-0007A0r 1  24 24 24 24  
-0007A8r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-0007ACr 1  24 24 24 24  
-0007B0r 1  24 24 24 24  
-0007B8r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-0007BCr 1  24 24 24 24  
-0007C0r 1  24 24 24 24  
-0007C8r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-0007CCr 1  24 24 24 24  
-0007D0r 1  24 24 24 24  
-0007D8r 1  24 24 24 24  	.byte $24,$24,$24,$24,$45,$45,$45,$45,$45,$45,$45,$45,$24,$24,$24,$24
-0007DCr 1  45 45 45 45  
-0007E0r 1  45 45 45 45  
-0007E8r 1  24 45 45 45  	.byte $24,$45,$45,$45,$45,$45,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-0007ECr 1  45 45 24 24  
-0007F0r 1  24 24 24 24  
-0007F8r 1  24 24 24 24  	.byte $24,$24,$24,$24,$47,$47,$47,$47,$47,$47,$47,$47,$24,$24,$24,$24
-0007FCr 1  47 47 47 47  
-000800r 1  47 47 47 47  
-000808r 1  24 47 47 47  	.byte $24,$47,$47,$47,$47,$47,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-00080Cr 1  47 47 24 24  
-000810r 1  24 24 24 24  
-000818r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-00081Cr 1  24 24 24 24  
-000820r 1  24 24 24 24  
-000828r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-00082Cr 1  24 24 24 24  
-000830r 1  24 24 24 24  
-000838r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-00083Cr 1  24 24 24 24  
-000840r 1  24 24 24 24  
-000848r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-00084Cr 1  24 24 24 24  
-000850r 1  24 24 24 24  
-000858r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-00085Cr 1  24 24 24 24  
-000860r 1  24 24 24 24  
-000868r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-00086Cr 1  24 24 24 24  
-000870r 1  24 24 24 24  
-000878r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
-00087Cr 1  24 24 24 24  
-000880r 1  24 24 24 24  
-000888r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$60,$61,$62,$63,$24,$24,$24,$24
-00088Cr 1  24 24 24 24  
-000890r 1  60 61 62 63  
-000898r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$31
-00089Cr 1  24 24 24 24  
-0008A0r 1  24 24 24 24  
-0008A8r 1  32 24 24 24  	.byte $32,$24,$24,$24,$24,$24,$24,$24,$64,$65,$66,$67,$24,$24,$24,$24
-0008ACr 1  24 24 24 24  
-0008B0r 1  64 65 66 67  
-0008B8r 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$30,$34
-0008BCr 1  24 24 24 24  
-0008C0r 1  24 24 24 24  
-0008C8r 1  26 33 24 24  	.byte $26,$33,$24,$24,$24,$24,$24,$24,$68,$69,$26,$6a,$24,$24,$24,$24
-0008CCr 1  24 24 24 24  
-0008D0r 1  68 69 26 6A  
-0008D8r 1  24 24 36 37  	.byte $24,$24,$36,$37,$24,$24,$24,$24,$24,$24,$24,$24,$24,$30,$26,$26
-0008DCr 1  24 24 24 24  
-0008E0r 1  24 24 24 24  
-0008E8r 1  26 34 33 24  	.byte $26,$34,$33,$24,$24,$24,$24,$24,$68,$69,$26,$6a,$24,$24,$24,$24
-0008ECr 1  24 24 24 24  
-0008F0r 1  68 69 26 6A  
-0008F8r 1  24 35 25 25  	.byte $24,$35,$25,$25,$38,$24,$24,$24,$24,$24,$24,$24,$30,$26,$34,$26
-0008FCr 1  38 24 24 24  
-000900r 1  24 24 24 24  
-000908r 1  26 26 26 33  	.byte $26,$26,$26,$33,$24,$24,$24,$24,$68,$69,$26,$6a,$24,$24,$24,$24
-00090Cr 1  24 24 24 24  
-000910r 1  68 69 26 6A  
-000918r 1  B4 B5 B4 B5  	.byte $b4,$b5,$b4,$b5,$b4,$b5,$b4,$b5,$b4,$b5,$b4,$b5,$b4,$b5,$b4,$b5
-00091Cr 1  B4 B5 B4 B5  
-000920r 1  B4 B5 B4 B5  
-000928r 1  B4 B5 B4 B5  	.byte $b4,$b5,$b4,$b5,$b4,$b5,$b4,$b5,$b4,$b5,$b4,$b5,$b4,$b5,$b4,$b5
-00092Cr 1  B4 B5 B4 B5  
-000930r 1  B4 B5 B4 B5  
-000938r 1  B6 B7 B6 B7  	.byte $b6,$b7,$b6,$b7,$b6,$b7,$b6,$b7,$b6,$b7,$b6,$b7,$b6,$b7,$b6,$b7
-00093Cr 1  B6 B7 B6 B7  
-000940r 1  B6 B7 B6 B7  
-000948r 1  B6 B7 B6 B7  	.byte $b6,$b7,$b6,$b7,$b6,$b7,$b6,$b7,$b6,$b7,$b6,$b7,$b6,$b7,$b6,$b7
-00094Cr 1  B6 B7 B6 B7  
-000950r 1  B6 B7 B6 B7  
-000958r 1               NewWorldAttribute:
-000958r 1  54 50 50 00  	.byte $54,$50,$50,$00,$55,$01,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-00095Cr 1  55 01 00 00  
-000960r 1  00 00 00 00  
-000968r 1  00 00 00 00  	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$04,$05,$00
-00096Cr 1  00 00 00 00  
-000970r 1  00 00 00 00  
-000978r 1  00 00 00 00  	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$f0,$00
-00097Cr 1  00 00 00 00  
-000980r 1  00 00 00 00  
-000988r 1  F0 B0 A0 FC  	.byte $f0,$b0,$a0,$fc,$f3,$a0,$ff,$00,$0a,$0a,$0a,$0a,$0a,$0a,$0a,$0a
-00098Cr 1  F3 A0 FF 00  
-000990r 1  0A 0A 0A 0A  
-000998r 1               ;;Paleta de colores original
-000998r 1               NewWorldPalette:
-000998r 1  21 27 16 0F  	.byte $21,$27,$16,$0f,$21,$20,$21,$0f,$21,$20,$16,$0f,$21,$2a,$1a,$0f
-00099Cr 1  21 20 21 0F  
-0009A0r 1  21 20 16 0F  
-0009A8r 1  21 16 27 18      .byte $21,MEDIUM_RED,LIGHT_ORANGE,MEDIUM_YELLOW
-0009ACr 1  27 16 20 27      .byte  LIGHT_ORANGE,MEDIUM_RED,$20,LIGHT_ORANGE
-0009B0r 1  0F 16 16 29      .byte  BLACK,MEDIUM_RED,MEDIUM_RED,LIGHT_CHARTREUSE
-0009B4r 1  0F 16 16 29      .byte  BLACK,MEDIUM_RED,MEDIUM_RED,LIGHT_CHARTREUSE
-0009B8r 1               
-0009B8r 1               
-0009B8r 1               
-0009B8r 1               
-0009B8r 1               .segment "VECTORS" ; Direcciones para las ISR (rutinas de interrupcion)
+00023Cr 1               verificaDerecha:
+00023Cr 1  A9 00            LDA #$00
+00023Er 1  85 rr            STA TileCount
+000240r 1  A5 rr            LDA MarioOffsetX
+000242r 1  18               CLC
+000243r 1  69 11            ADC #17
+000245r 1  85 rr            STA FindTileX
+000247r 1  A5 rr            LDA MarioOffsetY
+000249r 1  85 rr            STA FindTileY
+00024Br 1               
+00024Br 1               detectarColision:
+00024Br 1                   ;;Ahora FindTileX y FindTileY tienen el primer punto a comparar
+00024Br 1  20 rr rr         JSR SUBFindTile
+00024Er 1                   ;;Si dio mayor a $3F entonces hay colision
+00024Er 1  C9 3F            CMP #$3F
+000250r 1  30 02            BMI noHayColisionUno
+000252r 1  E6 rr            INC TileCount
+000254r 1               noHayColisionUno:
+000254r 1  18               CLC
+000255r 1  A5 rr            LDA FindTileY
+000257r 1  69 10            ADC #16
+000259r 1  85 rr            STA FindTileY
+00025Br 1  20 rr rr         JSR SUBFindTile
+00025Er 1  C9 3F            CMP #$3F
+000260r 1  30 02            BMI noHayColisionDos
+000262r 1  E6 rr            INC TileCount
+000264r 1               noHayColisionDos:
+000264r 1  A5 rr        	LDA TileCount
+000266r 1               	;; si TileCount es 0 entonces no hay colision
+000266r 1               	;; Si es mayor a 0 entonces hay colision
+000266r 1               	;; Devolvemos esto
+000266r 1  60           	RTS
+000267r 1               
+000267r 1               ;;Rutina para leer el registro del Joystick tomada de
+000267r 1               ;; https://wiki.nesdev.com/w/index.php/Controller_reading_code
+000267r 1               SUBReadJoy:
+000267r 1  A9 01            lda #$01
+000269r 1                   ; While the strobe bit is set, buttons will be continuously reloaded.
+000269r 1                   ; This means that reading from JOYPAD1 will only return the state of the
+000269r 1                   ; first button: button A.
+000269r 1  8D 16 40         sta JOYPAD1
+00026Cr 1  85 rr            sta JoystickPress
+00026Er 1  4A               lsr a        ; now A is 0
+00026Fr 1                   ; By storing 0 into JOYPAD1, the strobe bit is cleared and the reloading stops.
+00026Fr 1                   ; This allows all 8 buttons (newly reloaded) to be read from JOYPAD1.
+00026Fr 1  8D 16 40         sta JOYPAD1
+000272r 1               loop:
+000272r 1  AD 16 40         lda JOYPAD1
+000275r 1  4A               lsr a	       ; bit 0 -> Carry
+000276r 1  26 rr            rol JoystickPress  ; Carry -> bit 0; bit 7 -> Carry
+000278r 1  90 F8            bcc loop
+00027Ar 1  60               rts
+00027Br 1               
+00027Br 1               
+00027Br 1                ;;Esta subrutina busca un TILE en un mapa (NewWorld) usando
+00027Br 1                ;;coordenadas X e Y apuntadas por FindTileX, FindTileY y usa un indice
+00027Br 1                ;;de 2 bytes para recorrer el mapa (NameTablePointer)
+00027Br 1                ;;Codigo tomado de:
+00027Br 1                ;; http://forums.nesdev.com/viewtopic.php?t=19551
+00027Br 1               SUBFindTile:
+00027Br 1  18             clc
+00027Cr 1                 ;;Dado que buscamos en una matriz de 32x30 donde cada elemento tiene
+00027Cr 1                 ;; 8x8 pixeles, tenemos que dividir por 8 y multiplicar por 32
+00027Cr 1                 ;; pero esto es lo mismo que multiplicar por 4, asi que tomamos
+00027Cr 1                 ;; los 5 bits mas significativos de la posicion Y
+00027Cr 1  A5 rr          lda FindTileY
+00027Er 1  29 F8          and #%11111000
+000280r 1               
+000280r 1                 ;;Y shifteamos a la izquierda dos veces para multiplicar por 4
+000280r 1  0A             asl
+000281r 1  26 rr          rol NameTablePointer+1
+000283r 1  0A             asl
+000284r 1  26 rr          rol NameTablePointer+1
+000286r 1                 ;;Y esos valores los guardamos en la parte alta de NameTablePointer
+000286r 1  18             clc
+000287r 1  69 rr          adc #<NewWorld ;;Cargamos la parte baja del mapa
+000289r 1  85 rr          sta NameTablePointer+0
+00028Br 1  A5 rr          lda NameTablePointer+1
+00028Dr 1  29 03          and #%00000011
+00028Fr 1  69 rr          adc #>NewWorld
+000291r 1  85 rr          sta NameTablePointer+1 ;;Ahora la parte alta del mapa
+000293r 1               
+000293r 1                 ;;Ahora ya avanzamos en el vector de 32x30 tantas filas como tiles
+000293r 1                 ;;en Y hacian falta, asi que tenemos que dividir la posicion X
+000293r 1                 ;;en 8 y usar eso como indice
+000293r 1  18             clc
+000294r 1  A5 rr          lda FindTileX
+000296r 1  E9 01          SBC #1
+000298r 1  4A             lsr
+000299r 1  4A             lsr
+00029Ar 1  4A             lsr
+00029Br 1  A8             tay
+00029Cr 1               
+00029Cr 1                 ;Ahora NameTablePointer tiene NewWorld avanzando en Y, necesitamos
+00029Cr 1                 ;resolver X que ya esta dividido por 8 en el registro Y. Asi que lo
+00029Cr 1                 ;usamos como indice apuntando indirecto indexado con NameTablePointer
+00029Cr 1  B1 rr          lda (NameTablePointer), y
+00029Er 1                 ;;Listo, en el acumulador quedo el TILE apuntado por FindTileX e Y.
+00029Er 1  60             RTS
+00029Fr 1               
+00029Fr 1               
+00029Fr 1               ;;Esta subrutina se fija si mario tiene algun lugar donde estar apoyado
+00029Fr 1               ;;caso contrario lo hace caer por gravedad
+00029Fr 1               SUBAplicarGravedad:
+00029Fr 1               	;;Verifica si mario no tiene nada debajo de sus pies y debe caer
+00029Fr 1               	;; SALVO que este subiendo
+00029Fr 1  A9 00        	LDA #$00
+0002A1r 1  85 rr        	STA TileCount
+0002A3r 1  A5 rr        	LDA MarioEstadoSalto
+0002A5r 1  29 80        	AND #%10000000
+0002A7r 1  D0 32        	BNE chauGravedad ;; Esta saltando
+0002A9r 1               	;; Verificamos que no haya nada debajo en los dos extremos
+0002A9r 1               
+0002A9r 1  18           	CLC
+0002AAr 1  A5 rr        	LDA MarioOffsetY
+0002ACr 1  69 12        	ADC #18
+0002AEr 1  85 rr        	STA FindTileY
+0002B0r 1  A5 rr        	LDA MarioOffsetX
+0002B2r 1  85 rr        	STA FindTileX
+0002B4r 1  20 rr rr     	JSR SUBFindTile
+0002B7r 1               	;;Ahora A tiene el tile a abajo
+0002B7r 1  C9 3F        	CMP #$3F
+0002B9r 1  10 02        	BPL nadaX
+0002BBr 1  E6 rr        	INC TileCount
+0002BDr 1               nadaX:
+0002BDr 1  18           	CLC
+0002BEr 1  A5 rr        	LDA MarioOffsetX
+0002C0r 1  69 10        	ADC #16
+0002C2r 1  85 rr        	STA FindTileX
+0002C4r 1  20 rr rr     	JSR SUBFindTile
+0002C7r 1  C9 3F        	CMP #$3F
+0002C9r 1  10 02        	BPL finGravedad
+0002CBr 1  E6 rr        	INC TileCount
+0002CDr 1               
+0002CDr 1               finGravedad:
+0002CDr 1  A5 rr           LDA TileCount
+0002CFr 1  C9 02           CMP #$02
+0002D1r 1  D0 08           BNE chauGravedad
+0002D3r 1  E6 rr           INC MarioOffsetY
+0002D5r 1  E6 rr           INC MarioOffsetY
+0002D7r 1  A9 40           LDA #%01000000
+0002D9r 1  85 rr           STA MarioEstadoSalto ;;Mario esta cayendo
+0002DBr 1               chauGravedad:
+0002DBr 1  60              RTS
+0002DCr 1               
+0002DCr 1               SUBActualizaEstadoMario:
+0002DCr 1               	;; Esta subrutina actualiza el estado de mario segun su posicion
+0002DCr 1               	;; o si esta saltando o cayendo.
+0002DCr 1  A9 00        	LDA #$00
+0002DEr 1  85 rr        	STA MarioEstadoSprite ;;Primero borramos el estado del sprite
+0002E0r 1               
+0002E0r 1               	;;Verificamos a que lado apuntaba mario por ultima vez
+0002E0r 1  A5 rr        	LDA MarioUltimoLado
+0002E2r 1  D0 12        	BNE miraIzquierda
+0002E4r 1               miraDerecha:
+0002E4r 1               	;;Vemos si esta saltando
+0002E4r 1  A5 rr        	LDA MarioEstadoSalto
+0002E6r 1  F0 24        	BEQ estadoSegunPosicion
+0002E8r 1               	;;Esta saltando a la derecha
+0002E8r 1               	;; Puede que este cayendo
+0002E8r 1  29 40        	AND #%01000000
+0002EAr 1  D0 05        	BNE cayendoGravedadDerecha
+0002ECr 1  A9 05        	LDA #$05 ;;Si no cae ni salta y esta quieto, entoces mira derecha
+0002EEr 1  85 rr        	STA MarioEstadoSprite
+0002F0r 1  60           	RTS
+0002F1r 1               cayendoGravedadDerecha:
+0002F1r 1  A9 03            LDA #$03 ;;Si esta cayendo por gravedad, manitos juntas
+0002F3r 1  85 rr            STA MarioEstadoSprite
+0002F5r 1  60               RTS
+0002F6r 1               miraIzquierda:
+0002F6r 1  A5 rr            LDA MarioEstadoSalto
+0002F8r 1  F0 0E            BEQ preEstadoSegunPosicion
+0002FAr 1                   ;;Puede que este cayendo
+0002FAr 1  29 40            AND #%01000000
+0002FCr 1  D0 05            BNE cayendoGravedadIzquierda
+0002FEr 1  A9 85            LDA #$85 ;;Si no cae ni salta y esta quiero, entonces mira izquierda
+000300r 1  85 rr            STA MarioEstadoSprite
+000302r 1  60               RTS
+000303r 1               cayendoGravedadIzquierda:
+000303r 1  A9 83        	LDA #$83 ;; Si esta cayendo por gravedad, manitos juntas
+000305r 1  85 rr        	STA MarioEstadoSprite
+000307r 1  60           	RTS
+000308r 1               
+000308r 1               ;;El estado de mario depende entonces de la posicion en donde esta
+000308r 1               ;;en pantalla
+000308r 1               preEstadoSegunPosicion:
+000308r 1  A9 80            LDA #$80
+00030Ar 1  85 rr            STA MarioEstadoSprite ;; Sumo $80 de base ya que es izquierda
+00030Cr 1               
+00030Cr 1               estadoSegunPosicion:
+00030Cr 1               	;; Esta quieto mario?
+00030Cr 1  A5 rr        	LDA JoystickPress
+00030Er 1               	;;enmascaro con LeftRight a ver si se mueve
+00030Er 1  29 03        	AND #%00000011
+000310r 1  D0 08        	BNE realPosicion ;;Efectivamente se esta apretando algun boton
+000312r 1               				     ;;del joystick asi que vamos al estado basado
+000312r 1               				     ;;en la posicion de la pantalla
+000312r 1  18           	CLC
+000313r 1  A5 rr        	LDA MarioEstadoSprite
+000315r 1  69 04        	ADC #$04
+000317r 1  85 rr        	STA MarioEstadoSprite
+000319r 1  60           	RTS
+00031Ar 1               realPosicion:
+00031Ar 1               	;;Tomo la posicion X
+00031Ar 1  18           	CLC
+00031Br 1  A5 rr        	LDA MarioOffsetX
+00031Dr 1  29 18        	AND #%00011000
+00031Fr 1               	;;Dividimos por 8 y tomamos solo dos bits (4 estados posibles)
+00031Fr 1  4A           	LSR
+000320r 1  4A           	LSR
+000321r 1  4A           	LSR
+000322r 1  65 rr        	ADC MarioEstadoSprite
+000324r 1  85 rr        	STA MarioEstadoSprite
+000326r 1               	;;Entonces guardamos el estado en funcion de la coordenada X.
+000326r 1  60              RTS
+000327r 1               
+000327r 1               
+000327r 1               ;;Esta rutina detecta si dos Sprites estan colisionando.
+000327r 1               ;;Codigo tomado de:
+000327r 1               ;;https://refreshgames.co.uk/2018/01/27/nes-asm-tips-box-collision/
+000327r 1               ;;Y adaptado a sprite fijo (hongo) y sprite movil (mario)
+000327r 1               SUBDetectCollisions:
+000327r 1  48           	PHA ; Guarda el acumulador en el stack
+000328r 1  A9 00        	LDA #$00
+00032Ar 1  85 rr        	STA SpriteChoca ;Inicializa SpriteChoca en 0 asumiendo que no choca
+00032Cr 1               ; Verifica primer caso
+00032Cr 1  18           	CLC
+00032Dr 1  A5 rr        	LDA MarioOffsetX ;Toma coordenada de MarioX
+00032Fr 1  69 10        	ADC #16 ; Dado que tiene 16 de ancho se lo suma
+000331r 1  C9 40        	CMP #HONGOX ; Compara con el comienzo del hongo
+000333r 1  30 1F        	BMI FinishCollisionCheckBetter ;Si es menor, no puede estar chocando
+000335r 1               
+000335r 1               ; Verifica segundo caso
+000335r 1  18           	CLC
+000336r 1  A9 40        	LDA #HONGOX ;Carga coordenada del hongo X
+000338r 1  69 10        	ADC #16 ; Dado que el hongo es de 16 de ancho, los suma
+00033Ar 1  C5 rr        	CMP MarioOffsetX ; Comparo contra el comienzo de mario en X
+00033Cr 1  30 16        	BMI FinishCollisionCheckBetter ;Si es menor, no puede estar chocando
+00033Er 1               
+00033Er 1               ; Verifica tercer caso
+00033Er 1  18           	CLC
+00033Fr 1  A5 rr        	LDA MarioOffsetY ; Carga la posicion de MArioY
+000341r 1  69 10        	ADC #16 ; dado que es de 16 de alto, se los suma
+000343r 1  C9 4C        	CMP #HONGOY ; compara con la posicion Y del hongo
+000345r 1  30 0D        	BMI FinishCollisionCheckBetter ;Si es menor, no puede estar chocando
+000347r 1               
+000347r 1               ; Ultimo caso
+000347r 1  18           	CLC
+000348r 1  A9 4C        	LDA #HONGOY ; Carga la posicion Y del hongo
+00034Ar 1  69 10        	ADC #16 ; Dado que tiene 16 de alto se los suma
+00034Cr 1  C5 rr        	CMP MarioOffsetY ; Compara con la posicion Y de mario
+00034Er 1  30 04        	BMI FinishCollisionCheckBetter ;Si es menor, no puede estar chocando
+000350r 1               
+000350r 1               ;SI llego hasta aca sin saltar, quiere decir que hay colision
+000350r 1  A9 01        	LDA #$01
+000352r 1  85 rr        	STA SpriteChoca
+000354r 1               
+000354r 1               FinishCollisionCheckBetter:
+000354r 1  68           	PLA ; Restaura el valor de A del stack
+000355r 1               
+000355r 1  60           	RTS
+000356r 1               
+000356r 1               
+000356r 1               ;;Esta rutina verifica que pasa con el hongo y si hay choque
+000356r 1               ;;usando la rutina de arriba como auxiliar
+000356r 1               SUBCheckColisionHongo:
+000356r 1  A5 rr        	LDA HongoVisible
+000358r 1  F0 15        	BEQ finCheckColisionHongo
+00035Ar 1               	;;Hay que comparar donde esta mario con los limites del hongo
+00035Ar 1  20 rr rr     	JSR SUBDetectCollisions
+00035Dr 1  A5 rr        	LDA SpriteChoca
+00035Fr 1  F0 0E        	BEQ finCheckColisionHongo ;;No esta chocando con el hongo
+000361r 1               	;;Aca si esta chocando, asi que si el hongo esta visible
+000361r 1               	;;lo ocultamos
+000361r 1  A9 00        	LDA #0
+000363r 1  85 rr        	STA HongoVisible
+000365r 1               	;;Sumamos un puntito
+000365r 1  20 rr rr     	JSR SUBIncrementarScore
+000368r 1               	;;Refrezcamos el hongo en pantalla (no se muestra mas)
+000368r 1  20 rr rr     	JSR SUBDisplayHongo
+00036Br 1               	;;Tocamos LSD
+00036Br 1  A9 01        	LDA #1
+00036Dr 1  85 rr        	STA LSDPlaying
+00036Fr 1               finCheckColisionHongo:
+00036Fr 1  60               RTS
+000370r 1               
+000370r 1               ;;Esta rutina muestra el hongo en pantalla dependiendo de si
+000370r 1               ;;la variable HongoVisible esta en 1 o 0.
+000370r 1               SUBDisplayHongo:
+000370r 1  A5 rr        	LDA HongoVisible
+000372r 1  D0 0F        	BNE dibujalo
+000374r 1               	;;Si no esta visible, lo dibujamos fuera de pantalla
+000374r 1  A9 FF        	LDA #$FF
+000376r 1  8D 20 02     	STA $0220
+000379r 1  8D 24 02     	STA $0224
+00037Cr 1  8D 28 02         STA $0228
+00037Fr 1  8D 2C 02         STA $022C
+000382r 1  60           	RTS
+000383r 1               ;;Si esta visible, entonces los dibujamos en coordenadas fijas
+000383r 1               dibujalo:
+000383r 1  18             CLC
+000384r 1  A9 4C          LDA #76
+000386r 1  8D 20 02       STA $0220
+000389r 1  18             clc
+00038Ar 1  A9 40          LDA #64
+00038Cr 1  8D 23 02       STA $0223
+00038Fr 1  A9 76          LDA #$76
+000391r 1  8D 21 02       STA $0221
+000394r 1  A9 01          LDA #$01
+000396r 1  8D 22 02       STA $0222
+000399r 1               
+000399r 1                 ;Seguimos con UpperRight UR
+000399r 1  18             clc
+00039Ar 1  A9 4C          LDA #76
+00039Cr 1  8D 24 02       STA $0224
+00039Fr 1  18             clc
+0003A0r 1  A9 48          LDA #72
+0003A2r 1  8D 27 02       STA $0227
+0003A5r 1  A9 77          LDA #$77
+0003A7r 1  8D 25 02       STA $0225
+0003AAr 1  A9 01          LDA #$01
+0003ACr 1  8D 26 02       STA $0226
+0003AFr 1               
+0003AFr 1                 ;Seguimos con LowerLeft LL
+0003AFr 1  18             clc
+0003B0r 1  A9 54          LDA #84
+0003B2r 1  8D 28 02       STA $0228
+0003B5r 1  18             clc
+0003B6r 1  A9 40          LDA #64
+0003B8r 1  8D 2B 02       STA $022B
+0003BBr 1  A9 78          LDA #$78
+0003BDr 1  8D 29 02       STA $0229
+0003C0r 1  A9 01          LDA #$01
+0003C2r 1  8D 2A 02       STA $022A
+0003C5r 1               
+0003C5r 1                 ;Ultimo con lowerRight LR
+0003C5r 1  18             clc
+0003C6r 1  A9 54          LDA #84
+0003C8r 1  8D 2C 02       STA $022C
+0003CBr 1  18             clc
+0003CCr 1  A9 48          LDA #72
+0003CEr 1  8D 2F 02       STA $022F
+0003D1r 1  A9 79          LDA #$79
+0003D3r 1  8D 2D 02       STA $022D
+0003D6r 1  A9 01          LDA #$01
+0003D8r 1  8D 2E 02       STA $022E
+0003DBr 1               
+0003DBr 1  60             RTS
+0003DCr 1               
+0003DCr 1               
+0003DCr 1               ;;Esta rutina se fija si mario choca algo con la cabeza
+0003DCr 1               ;;En caso de ser un BOX ? , entonces muestra el hongo
+0003DCr 1               SUBCheckCabeza:
+0003DCr 1               	;; Esta rutina se fija que no haya nada arriba de la cabeza a mario
+0003DCr 1  18           	CLC
+0003DDr 1  A5 rr        	LDA MarioOffsetY
+0003DFr 1  E9 01        	SBC #1
+0003E1r 1  85 rr        	STA FindTileY
+0003E3r 1  A9 00        	LDA #0
+0003E5r 1  85 rr        	STA TileCount
+0003E7r 1  A5 rr        	LDA MarioOffsetX
+0003E9r 1  85 rr        	STA FindTileX
+0003EBr 1  20 rr rr     	JSR SUBFindTile
+0003EEr 1               	;; Si hay un $55 o $56 hay un BOX
+0003EEr 1               	;; Si arriba hay algo mayor a $3F sumo
+0003EEr 1  C9 3F        	CMP #$3F
+0003F0r 1  30 0E        	BMI checkCabeza2
+0003F2r 1  E6 rr        	INC TileCount
+0003F4r 1  C9 55        	CMP #$55
+0003F6r 1  D0 02        	BNE checkOtroQuestion
+0003F8r 1  E6 rr        	INC HongoVisible
+0003FAr 1               checkOtroQuestion:
+0003FAr 1  C9 56            CMP #$56
+0003FCr 1  D0 02            BNE checkCabeza2
+0003FEr 1  E6 rr            INC HongoVisible
+000400r 1               checkCabeza2:
+000400r 1  18           	CLC
+000401r 1  A5 rr        	LDA FindTileX
+000403r 1  69 10        	ADC #16
+000405r 1  85 rr        	STA FindTileX
+000407r 1  20 rr rr     	JSR SUBFindTile
+00040Ar 1  C9 3F        	CMP #$3F
+00040Cr 1  30 0E        	BMI finCheckCabeza
+00040Er 1  E6 rr            INC TileCount
+000410r 1  C9 55        	CMP #$55
+000412r 1  D0 02        	BNE checkOtroQuestion1
+000414r 1  E6 rr        	INC HongoVisible
+000416r 1               checkOtroQuestion1:
+000416r 1  C9 56            CMP #$56
+000418r 1  D0 02            BNE finCheckCabeza
+00041Ar 1  E6 rr            INC HongoVisible
+00041Cr 1               finCheckCabeza:
+00041Cr 1  A5 rr            LDA TileCount
+00041Er 1  60               RTS
+00041Fr 1               
+00041Fr 1               ;;Esta rutina se fija si mario esta saltando y procesa el salto.
+00041Fr 1               SUBCheckSalto:
+00041Fr 1                   ;;No puede haber gravedad aun, ya que se resetea cada vez que se
+00041Fr 1                   ;; dibuja  a mario
+00041Fr 1                   ;; El BMS de MArioEstadoSalto indica si esta saltando o no
+00041Fr 1  A5 rr            LDA MarioEstadoSalto
+000421r 1  29 80            AND #%10000000
+000423r 1  F0 52            BEQ finCheckSalto
+000425r 1                   ;;Dado que MarioEstadoSalto tiene 10xxxxxx
+000425r 1                   ;;podemos vemos si subimos o bajamos
+000425r 1  A5 rr            LDA MarioEstadoSalto
+000427r 1  C9 97            CMP #%10010111
+000429r 1  10 15            BPL Bajando
+00042Br 1                   ;;Si estoy aca es porque esta subiendo con el salto
+00042Br 1  E6 rr            INC MarioEstadoSalto
+00042Dr 1                   ;;HAy que verificar que no haya nada en la cabeza de mario
+00042Dr 1  20 rr rr         JSR SUBCheckCabeza
+000430r 1                   ;;Si devolvio 0 es que se puede saltar
+000430r 1  D0 0A            BNE ChocoCabeza
+000432r 1  18               CLC
+000433r 1  A5 rr            LDA MarioOffsetY
+000435r 1  E9 02            SBC #2
+000437r 1  85 rr            STA MarioOffsetY
+000439r 1  4C rr rr         JMP finCheckSalto
+00043Cr 1               
+00043Cr 1               ChocoCabeza:
+00043Cr 1                   ;;Como choco la cabeza paramos de subir
+00043Cr 1  A9 9F            LDA #%10011111
+00043Er 1  85 rr            STA MarioEstadoSalto
+000440r 1               
+000440r 1               Bajando:
+000440r 1               	;; SI esta bajando, tenemos que bajar hasta que choca con algo
+000440r 1               	;; entonces copiamos la rutina que verifica por gravedad
+000440r 1  A9 00        	LDA #0
+000442r 1  85 rr        	STA TileCount
+000444r 1  18           	CLC
+000445r 1  A5 rr        	LDA MarioOffsetY
+000447r 1  69 12        	ADC #18
+000449r 1  85 rr        	STA FindTileY
+00044Br 1  A5 rr        	LDA MarioOffsetX
+00044Dr 1  85 rr        	STA FindTileX
+00044Fr 1  20 rr rr     	JSR SUBFindTile
+000452r 1               	;;Ahora A tiene el tile a abajo
+000452r 1  C9 3F        	CMP #$3F
+000454r 1  10 02        	BPL nadaXcayendo
+000456r 1  E6 rr        	INC TileCount
+000458r 1               nadaXcayendo:
+000458r 1  18           	CLC
+000459r 1  A5 rr        	LDA MarioOffsetX
+00045Br 1  69 10        	ADC #16
+00045Dr 1  85 rr        	STA FindTileX
+00045Fr 1  20 rr rr     	JSR SUBFindTile
+000462r 1  C9 3F        	CMP #$3F
+000464r 1  10 02        	BPL finCayendo
+000466r 1  E6 rr        	INC TileCount
+000468r 1               
+000468r 1               finCayendo:
+000468r 1  A5 rr           LDA TileCount
+00046Ar 1  C9 02           CMP #$02
+00046Cr 1  D0 05           BNE impactoSuelo
+00046Er 1  E6 rr           INC MarioOffsetY
+000470r 1  E6 rr           INC MarioOffsetY
+000472r 1  60              RTS
+000473r 1               
+000473r 1               impactoSuelo:
+000473r 1                  ;;No cae mas
+000473r 1  A9 00           LDA #$00
+000475r 1  85 rr           STA MarioEstadoSalto
+000477r 1               
+000477r 1               finCheckSalto:
+000477r 1  60               RTS
+000478r 1               
+000478r 1               
+000478r 1               ;;Esta es la rutina principal que actualiza todos los Sprites.
+000478r 1               SUBDibujaMario:
+000478r 1               	;; Primero reseteo el flag de cayendo por gravedad
+000478r 1               	;; ya que  lo vamos a chequear siempre despues de ver si esta
+000478r 1               	;; saltando o no.
+000478r 1  A5 rr        	LDA MarioEstadoSalto
+00047Ar 1  29 BF        	AND #%10111111
+00047Cr 1  85 rr        	STA MarioEstadoSalto
+00047Er 1               	;; Primero vemos si esta saltando
+00047Er 1  20 rr rr     	JSR SUBCheckSalto
+000481r 1               	;; Ahora que ya sabemos si salta o no, vemos si se cae por gravedad
+000481r 1  20 rr rr     	JSR SUBAplicarGravedad
+000484r 1               
+000484r 1               	;;Dado que la posicion X, Y ya esta actualizada podemos actualizar
+000484r 1               	;;como se dibuja mario en pantalla
+000484r 1  20 rr rr     	JSR SUBActualizaEstadoMario
+000487r 1               	;;Vemos si choco con el hongo y lo mostramos
+000487r 1  20 rr rr     	JSR SUBCheckColisionHongo
+00048Ar 1  20 rr rr     	JSR SUBDisplayHongo
+00048Dr 1               
+00048Dr 1               	;; Ahora que su estado esta actualizado podemos dibujarlo.
+00048Dr 1               	;; Apuntamos a donde estan los sprites relativos al estado
+00048Dr 1               	;; y buscamos los mismos con la variable de estado.
+00048Dr 1  A5 rr        	LDA MarioEstadoSprite
+00048Fr 1  C9 70        	CMP #$70
+000491r 1  10 0B        	BPL parteIzquierda
+000493r 1  A9 rr            LDA #<dbEstadoMario00
+000495r 1  85 rr            STA MarioEstadoSpritedb
+000497r 1  A9 rr            LDA #>dbEstadoMario00
+000499r 1  85 rr            STA MarioEstadoSpritedb+1
+00049Br 1  4C rr rr         JMP sumarBajo
+00049Er 1               parteIzquierda:
+00049Er 1  A9 rr            LDA #<dbEstadoMario80
+0004A0r 1  85 rr            STA MarioEstadoSpritedb
+0004A2r 1  A9 rr            LDA #>dbEstadoMario80
+0004A4r 1  85 rr            STA MarioEstadoSpritedb+1
+0004A6r 1               
+0004A6r 1               sumarBajo:
+0004A6r 1  A5 rr            LDA MarioEstadoSprite
+0004A8r 1  29 0F            AND #$0F
+0004AAr 1  0A               asl
+0004ABr 1  0A               asl
+0004ACr 1  0A               asl
+0004ADr 1  65 rr            ADC MarioEstadoSpritedb
+0004AFr 1  85 rr            STA MarioEstadoSpritedb
+0004B1r 1  90 02            BCC actualizaSprite
+0004B3r 1  E6 rr            INC MarioEstadoSpritedb+1
+0004B5r 1               
+0004B5r 1               ;; Ahora MarioEstadoSpritedb apunta a un vector que tiene
+0004B5r 1               ;; todos los valores para los sprites
+0004B5r 1               ;; Cada parte de mario (UL, UR, LL, LR) necesita un valor de sprite
+0004B5r 1               ;; y un atributo asi que cargamos los 8 valores
+0004B5r 1               actualizaSprite:
+0004B5r 1  A0 00            LDY #0
+0004B7r 1  B1 rr            lda (MarioEstadoSpritedb), y
+0004B9r 1  8D 11 02         STA $0211
+0004BCr 1  C8               INY
+0004BDr 1  B1 rr            LDA (MarioEstadoSpritedb), y
+0004BFr 1  8D 19 02         STA $0219
+0004C2r 1  C8               INY
+0004C3r 1  B1 rr            LDA (MarioEstadoSpritedb), y
+0004C5r 1  8D 15 02         STA $0215
+0004C8r 1  C8               INY
+0004C9r 1  B1 rr            LDA (MarioEstadoSpritedb), y
+0004CBr 1  8D 1D 02         STA $021D
+0004CEr 1  C8               INY
+0004CFr 1  B1 rr            LDA (MarioEstadoSpritedb), y
+0004D1r 1  8D 12 02         STA $0212
+0004D4r 1  C8               INY
+0004D5r 1  B1 rr            LDA (MarioEstadoSpritedb), y
+0004D7r 1  8D 1A 02         STA $021A
+0004DAr 1  C8               INY
+0004DBr 1  B1 rr            LDA (MarioEstadoSpritedb), y
+0004DDr 1  8D 16 02         STA $0216
+0004E0r 1  C8               INY
+0004E1r 1  B1 rr            LDA (MarioEstadoSpritedb), y
+0004E3r 1  8D 1E 02         STA $021E
+0004E6r 1                   ;;Ahora que ya se cargo como se dibuja mario le decimos en donde
+0004E6r 1                   ;;Lo tiene que dibujar (cada parte)
+0004E6r 1  18               CLC
+0004E7r 1  A5 rr            LDA MarioOffsetY
+0004E9r 1  8D 10 02         STA $0210
+0004ECr 1  8D 18 02         STA $0218
+0004EFr 1  69 08            ADC #$08
+0004F1r 1  8D 14 02         STA $0214
+0004F4r 1  8D 1C 02         STA $021C
+0004F7r 1               
+0004F7r 1  18               CLC
+0004F8r 1  A5 rr            LDA MarioOffsetX
+0004FAr 1  8D 13 02         STA $0213
+0004FDr 1  8D 17 02         STA $0217
+000500r 1  69 08            ADC #$08
+000502r 1  8D 1B 02         STA $021B
+000505r 1  8D 1F 02         STA $021F
+000508r 1               
+000508r 1  60           	RTS
+000509r 1               
+000509r 1               ;;Tabla de estados de mario. Guarda primero el numero de sprite
+000509r 1               ;; y luego guarda el atributo correspondiente
+000509r 1               
+000509r 1               dbEstadoMario00: ;Moviendose Derecha etapa 0 (manos separadas)
+000509r 1                         ;UL, UR, LL, LR,UL,UR,LL, LR
+000509r 1  36 37 38 39  	.byte $36,$37,$38,$39,$0,$0,$0,$0
+00050Dr 1  00 00 00 00  
+000511r 1               dbEstadoMario01: ;Moviendose Derecha etapa 1 (manos juntas)
+000511r 1                         ;UL, UR, LL, LR,UL,UR,LL, LR
+000511r 1  3A 37 3B 3C  	.byte $3A,$37,$3B,$3C,$0,$0,$0,$0
+000515r 1  00 00 00 00  
+000519r 1               dbEstadoMario02: ;Moviendose Derecha etapa 2 (mano adelante)
+000519r 1                         ;UL, UR, LL, LR,UL,UR,LL, LR
+000519r 1  32 33 34 35  	.byte $32,$33,$34,$35,$0,$0,$0,$0
+00051Dr 1  00 00 00 00  
+000521r 1               dbEstadoMario03: ;Moviendose Derecha etapa 3 (manos juntas)
+000521r 1                         ;UL, UR, LL, LR,UL,UR,LL, LR
+000521r 1  3A 37 3B 3C  	.byte $3A,$37,$3B,$3C,$0,$0,$0,$0
+000525r 1  00 00 00 00  
+000529r 1               dbEstadoMario04: ;Mario quieto mirando a la derecha
+000529r 1                         ;UL, UR, LL, LR,UL,UR,LL, LR
+000529r 1  32 33 4F 4F  	.byte $32,$33,$4F,$4F,$0,$0,$0,$40
+00052Dr 1  00 00 00 40  
+000531r 1               dbEstadoMario05: ;Salto positivo a la derecha
+000531r 1                         ;UL, UR, LL, LR,UL,UR,LL, LR
+000531r 1  32 41 42 43  	.byte $32,$41,$42,$43,$0,$0,$0,$0
+000535r 1  00 00 00 00  
+000539r 1               
+000539r 1               dbEstadoMario80: ;Moviendose Derecha etapa 0 (manos separadas)
+000539r 1                         ;UL, UR, LL, LR,UL,UR,LL, LR
+000539r 1  37 36 39 38  	.byte $37,$36,$39,$38,$40,$40,$40,$40
+00053Dr 1  40 40 40 40  
+000541r 1               dbEstadoMario81: ;Moviendose Derecha etapa 1 (manos juntas)
+000541r 1                         ;UL, UR, LL, LR,UL,UR,LL, LR
+000541r 1  37 3A 3C 3B  	.byte $37,$3A,$3C,$3B,$40,$40,$40,$40
+000545r 1  40 40 40 40  
+000549r 1               dbEstadoMario82: ;Moviendose Derecha etapa 2 (mano adelante)
+000549r 1                         ;UL, UR, LL, LR,UL,UR,LL, LR
+000549r 1  33 32 35 34  	.byte $33,$32,$35,$34,$40,$40,$40,$40
+00054Dr 1  40 40 40 40  
+000551r 1               dbEstadoMario83: ;Moviendose Derecha etapa 3 (manos juntas)
+000551r 1                         ;UL, UR, LL, LR,UL,UR,LL, LR
+000551r 1  37 3A 3C 3B  	.byte $37,$3A,$3C,$3B,$40,$40,$40,$40
+000555r 1  40 40 40 40  
+000559r 1               dbEstadoMario84: ;Mario quieto mirando a la derecha
+000559r 1                         ;UL, UR, LL, LR,UL,UR,LL, LR
+000559r 1  33 32 4F 4F  	.byte $33,$32,$4F,$4F,$40,$40,$0,$40
+00055Dr 1  40 40 00 40  
+000561r 1               dbEstadoMario85: ;Salto positivo a la derecha
+000561r 1                         ;UL, UR, LL, LR,UL,UR,LL, LR
+000561r 1  41 32 43 42  	.byte $41,$32,$43,$42,$40,$40,$40,$40
+000565r 1  40 40 40 40  
+000569r 1               
+000569r 1               
+000569r 1               
+000569r 1               ;; Esta rutina dibuja el fondo (Background Tiles).
+000569r 1               SUBDibujaFondo:
+000569r 1  AD 02 20       LDA $2002             ; Hay que leer el PPU para resetear la posicion
+00056Cr 1  A9 20          LDA #$20
+00056Er 1  8D 06 20       STA $2006             ; Se carga la parte alta de $2000
+000571r 1  A9 00          LDA #$00
+000573r 1  8D 06 20       STA $2006             ; Se carga la parte baja de $2000
+000576r 1  A2 00          LDX #$00
+000578r 1                 ;;Una pantalla entera tiene 32x30 tiles, o sea 960 bytes.
+000578r 1                 ;;Pero el registro X es de 8 bits, por ende tenemos que cargar
+000578r 1                 ;;de 256 bytes a la vez o usar modo indirecto indexado pero hay que
+000578r 1                 ;;contar con 16 bits, asi que es mas facil cargarlo por partes.
+000578r 1               
+000578r 1                 ;;Cargamos los primeros 256 bytes
+000578r 1               LoadBackgroundLoop:
+000578r 1  BD rr rr       LDA NewWorld, x
+00057Br 1  8D 07 20       STA $2007              ;Grabamos el valor a PPU, que se autoincrementa
+00057Er 1  E8             INX                    ; incrementamos X para el loop.
+00057Fr 1  E0 65          CPX #$65               ; en $65 corta para cargar el SCORE, sino sigue
+000581r 1  D0 F5          BNE LoadBackgroundLoop ; Mientras no haya recorrido los $65, que siga.
+000583r 1               
+000583r 1                 ;;Cargamos los puntos en el medio de los primeros 256
+000583r 1  A5 rr          LDA Puntos1
+000585r 1  8D 07 20       STA $2007
+000588r 1  A5 rr          LDA Puntos0
+00058Ar 1  8D 07 20       STA $2007
+00058Dr 1  A2 67          LDX #$67
+00058Fr 1               
+00058Fr 1               LoadBackgroundLoopPos:
+00058Fr 1  BD rr rr       LDA NewWorld, x
+000592r 1  8D 07 20       STA $2007
+000595r 1  E8             INX
+000596r 1  E0 00          CPX #$00
+000598r 1  D0 F5          BNE LoadBackgroundLoopPos ;Si no llego a 00, no termino aun.
+00059Ar 1               
+00059Ar 1                 ;;Todos los loops son mas o menos iguales
+00059Ar 1                 ;; pero con el offset avanzado en 256
+00059Ar 1               
+00059Ar 1               LoadBackgroundLoop256:
+00059Ar 1  BD rr rr       LDA NewWorld+256, x
+00059Dr 1  8D 07 20       STA $2007
+0005A0r 1  E8             INX
+0005A1r 1  E0 00          CPX #$00
+0005A3r 1  D0 F5          BNE LoadBackgroundLoop256
+0005A5r 1               
+0005A5r 1               LoadBackgroundLoop512:
+0005A5r 1  BD rr rr       LDA NewWorld+512, x
+0005A8r 1  8D 07 20       STA $2007
+0005ABr 1  E8             INX
+0005ACr 1  E0 00          CPX #$00
+0005AEr 1  D0 F5          BNE LoadBackgroundLoop512
+0005B0r 1               
+0005B0r 1                 ;;Este ultimo loop tiene que ir desde 768 hasta 960 solamente
+0005B0r 1               
+0005B0r 1               LoadBackgroundLoop192:
+0005B0r 1  BD rr rr       LDA NewWorld+512+256, x
+0005B3r 1  8D 07 20       STA $2007
+0005B6r 1  E8             INX
+0005B7r 1  E0 C0          CPX #192
+0005B9r 1  D0 F5          BNE LoadBackgroundLoop192
+0005BBr 1               
+0005BBr 1                ;;Este loop carga los registros de atributos que estan a continuacion de los tiles.
+0005BBr 1                ;;Comienza apuntando el PPU a la memoria de atributos correspondiente
+0005BBr 1               
+0005BBr 1               LoadAttribute:
+0005BBr 1  AD 02 20       LDA $2002
+0005BEr 1  A9 23          LDA #$23
+0005C0r 1  8D 06 20       STA $2006
+0005C3r 1  A9 C0          LDA #$C0
+0005C5r 1  8D 06 20       STA $2006
+0005C8r 1  A2 00          LDX #$00
+0005CAr 1               
+0005CAr 1                 ;;Ahora barremos los atributos y los vamos pasando al PPU
+0005CAr 1               LoadAttributeLoop:
+0005CAr 1  BD rr rr       LDA NewWorldAttribute, x
+0005CDr 1  8D 07 20       STA $2007
+0005D0r 1  E8             INX
+0005D1r 1  E0 40          CPX #64
+0005D3r 1  D0 F5          BNE LoadAttributeLoop
+0005D5r 1               
+0005D5r 1                 ;;Todo listo, podemos volver
+0005D5r 1  60             RTS
+0005D6r 1               
+0005D6r 1               ;;Cargamos los tiempos para el timer que genera las notas musicales
+0005D6r 1               ;;con el Pulse1 del PPU
+0005D6r 1               NOTAS:
+0005D6r 1  AB           	.byte %10101011 ;, %1
+0005D7r 1  93           	.byte %10010011 ;, %1
+0005D8r 1  7C           	.byte %01111100 ;, %1
+0005D9r 1  67           	.byte %01100111 ;, %1
+0005DAr 1  52           	.byte %01010010 ;, %1
+0005DBr 1  3F           	.byte %00111111 ;, %1
+0005DCr 1  2D           	.byte %00101101 ;, %1
+0005DDr 1  1C           	.byte %00011100 ;, %1
+0005DEr 1  0C           	.byte %00001100 ;, %1
+0005DFr 1  FD           	.byte %11111101 ;, %0
+0005E0r 1  EF           	.byte %11101111 ;, %0
+0005E1r 1  E1           	.byte %11100001 ;, %0
+0005E2r 1  D5           	.byte %11010101 ;, %0
+0005E3r 1  C9           	.byte %11001001 ;, %0
+0005E4r 1  BD           	.byte %10111101 ;, %0
+0005E5r 1  B3           	.byte %10110011 ;, %0
+0005E6r 1  A9           	.byte %10101001 ;, %0
+0005E7r 1  9F           	.byte %10011111 ;, %0
+0005E8r 1  96           	.byte %10010110 ;, %0
+0005E9r 1  8E           	.byte %10001110 ;, %0
+0005EAr 1  86           	.byte %10000110 ;, %0
+0005EBr 1  7E           	.byte %01111110 ;, %0
+0005ECr 1  77           	.byte %01110111 ;, %0
+0005EDr 1  70           	.byte %01110000 ;, %0
+0005EEr 1  00           	.byte $00
+0005EFr 1               
+0005EFr 1               ;;Cargamos el mapa estatico original (NameTable) con atributos
+0005EFr 1               NewWorld:
+0005EFr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+0005F3r 1  24 24 24 24  
+0005F7r 1  24 24 24 24  
+0005FFr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+000603r 1  24 24 24 24  
+000607r 1  24 24 24 24  
+00060Fr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+000613r 1  24 24 24 24  
+000617r 1  24 24 24 24  
+00061Fr 1  24 36 37 24  	.byte $24,$36,$37,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+000623r 1  24 24 24 24  
+000627r 1  24 24 24 24  
+00062Fr 1  24 24 24 19  	.byte $24,$24,$24,$19,$1e,$17,$1d,$18,$1c,$24,$24,$24,$24,$24,$24,$24
+000633r 1  1E 17 1D 18  
+000637r 1  1C 24 24 24  
+00063Fr 1  35 25 25 38  	.byte $35,$25,$25,$38,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+000643r 1  24 24 24 24  
+000647r 1  24 24 24 24  
+00064Fr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$00,$00,$24,$24,$24,$24,$24,$24,$24,$24,$24
+000653r 1  24 00 00 24  
+000657r 1  24 24 24 24  
+00065Fr 1  39 3A 3B 3C  	.byte $39,$3a,$3b,$3c,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+000663r 1  24 24 24 24  
+000667r 1  24 24 24 24  
+00066Fr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+000673r 1  24 24 24 24  
+000677r 1  24 24 24 24  
+00067Fr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+000683r 1  24 24 24 24  
+000687r 1  24 24 24 24  
+00068Fr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+000693r 1  24 24 24 24  
+000697r 1  24 24 24 24  
+00069Fr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+0006A3r 1  24 24 24 24  
+0006A7r 1  24 24 24 24  
+0006AFr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+0006B3r 1  24 24 24 24  
+0006B7r 1  24 24 24 24  
+0006BFr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+0006C3r 1  24 24 24 24  
+0006C7r 1  24 24 24 24  
+0006CFr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+0006D3r 1  24 24 24 24  
+0006D7r 1  24 24 24 24  
+0006DFr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+0006E3r 1  24 24 24 24  
+0006E7r 1  24 24 24 24  
+0006EFr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+0006F3r 1  24 24 24 24  
+0006F7r 1  24 24 24 24  
+0006FFr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+000703r 1  24 24 24 24  
+000707r 1  24 24 24 24  
+00070Fr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+000713r 1  24 24 24 24  
+000717r 1  24 24 24 24  
+00071Fr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+000723r 1  24 24 24 24  
+000727r 1  24 24 24 24  
+00072Fr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+000733r 1  24 24 24 24  
+000737r 1  24 24 24 24  
+00073Fr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+000743r 1  24 24 24 24  
+000747r 1  24 24 24 24  
+00074Fr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+000753r 1  24 24 24 24  
+000757r 1  24 24 24 24  
+00075Fr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+000763r 1  24 24 24 24  
+000767r 1  24 24 24 24  
+00076Fr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$53,$54,$24,$24,$24,$24,$24,$24
+000773r 1  24 24 24 24  
+000777r 1  53 54 24 24  
+00077Fr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$b0,$b2,$b0,$b2,$b0,$b2,$24,$24,$24,$24
+000783r 1  24 24 B0 B2  
+000787r 1  B0 B2 B0 B2  
+00078Fr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$55,$56,$24,$24,$24,$24,$24,$24
+000793r 1  24 24 24 24  
+000797r 1  55 56 24 24  
+00079Fr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$b1,$b3,$b1,$b3,$b1,$b3,$24,$24,$24,$24
+0007A3r 1  24 24 B1 B3  
+0007A7r 1  B1 B3 B1 B3  
+0007AFr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+0007B3r 1  24 24 24 24  
+0007B7r 1  24 24 24 24  
+0007BFr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+0007C3r 1  24 24 24 24  
+0007C7r 1  24 24 24 24  
+0007CFr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+0007D3r 1  24 24 24 24  
+0007D7r 1  24 24 24 24  
+0007DFr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+0007E3r 1  24 24 24 24  
+0007E7r 1  24 24 24 24  
+0007EFr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+0007F3r 1  24 24 24 24  
+0007F7r 1  24 24 24 24  
+0007FFr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+000803r 1  24 24 24 24  
+000807r 1  24 24 24 24  
+00080Fr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+000813r 1  24 24 24 24  
+000817r 1  24 24 24 24  
+00081Fr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+000823r 1  24 24 24 24  
+000827r 1  24 24 24 24  
+00082Fr 1  24 24 24 24  	.byte $24,$24,$24,$24,$45,$45,$45,$45,$45,$45,$45,$45,$24,$24,$24,$24
+000833r 1  45 45 45 45  
+000837r 1  45 45 45 45  
+00083Fr 1  24 45 45 45  	.byte $24,$45,$45,$45,$45,$45,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+000843r 1  45 45 24 24  
+000847r 1  24 24 24 24  
+00084Fr 1  24 24 24 24  	.byte $24,$24,$24,$24,$47,$47,$47,$47,$47,$47,$47,$47,$24,$24,$24,$24
+000853r 1  47 47 47 47  
+000857r 1  47 47 47 47  
+00085Fr 1  24 47 47 47  	.byte $24,$47,$47,$47,$47,$47,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+000863r 1  47 47 24 24  
+000867r 1  24 24 24 24  
+00086Fr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+000873r 1  24 24 24 24  
+000877r 1  24 24 24 24  
+00087Fr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+000883r 1  24 24 24 24  
+000887r 1  24 24 24 24  
+00088Fr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+000893r 1  24 24 24 24  
+000897r 1  24 24 24 24  
+00089Fr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+0008A3r 1  24 24 24 24  
+0008A7r 1  24 24 24 24  
+0008AFr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+0008B3r 1  24 24 24 24  
+0008B7r 1  24 24 24 24  
+0008BFr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+0008C3r 1  24 24 24 24  
+0008C7r 1  24 24 24 24  
+0008CFr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24
+0008D3r 1  24 24 24 24  
+0008D7r 1  24 24 24 24  
+0008DFr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$60,$61,$62,$63,$24,$24,$24,$24
+0008E3r 1  24 24 24 24  
+0008E7r 1  60 61 62 63  
+0008EFr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$31
+0008F3r 1  24 24 24 24  
+0008F7r 1  24 24 24 24  
+0008FFr 1  32 24 24 24  	.byte $32,$24,$24,$24,$24,$24,$24,$24,$64,$65,$66,$67,$24,$24,$24,$24
+000903r 1  24 24 24 24  
+000907r 1  64 65 66 67  
+00090Fr 1  24 24 24 24  	.byte $24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$24,$30,$34
+000913r 1  24 24 24 24  
+000917r 1  24 24 24 24  
+00091Fr 1  26 33 24 24  	.byte $26,$33,$24,$24,$24,$24,$24,$24,$68,$69,$26,$6a,$24,$24,$24,$24
+000923r 1  24 24 24 24  
+000927r 1  68 69 26 6A  
+00092Fr 1  24 24 36 37  	.byte $24,$24,$36,$37,$24,$24,$24,$24,$24,$24,$24,$24,$24,$30,$26,$26
+000933r 1  24 24 24 24  
+000937r 1  24 24 24 24  
+00093Fr 1  26 34 33 24  	.byte $26,$34,$33,$24,$24,$24,$24,$24,$68,$69,$26,$6a,$24,$24,$24,$24
+000943r 1  24 24 24 24  
+000947r 1  68 69 26 6A  
+00094Fr 1  24 35 25 25  	.byte $24,$35,$25,$25,$38,$24,$24,$24,$24,$24,$24,$24,$30,$26,$34,$26
+000953r 1  38 24 24 24  
+000957r 1  24 24 24 24  
+00095Fr 1  26 26 26 33  	.byte $26,$26,$26,$33,$24,$24,$24,$24,$68,$69,$26,$6a,$24,$24,$24,$24
+000963r 1  24 24 24 24  
+000967r 1  68 69 26 6A  
+00096Fr 1  B4 B5 B4 B5  	.byte $b4,$b5,$b4,$b5,$b4,$b5,$b4,$b5,$b4,$b5,$b4,$b5,$b4,$b5,$b4,$b5
+000973r 1  B4 B5 B4 B5  
+000977r 1  B4 B5 B4 B5  
+00097Fr 1  B4 B5 B4 B5  	.byte $b4,$b5,$b4,$b5,$b4,$b5,$b4,$b5,$b4,$b5,$b4,$b5,$b4,$b5,$b4,$b5
+000983r 1  B4 B5 B4 B5  
+000987r 1  B4 B5 B4 B5  
+00098Fr 1  B6 B7 B6 B7  	.byte $b6,$b7,$b6,$b7,$b6,$b7,$b6,$b7,$b6,$b7,$b6,$b7,$b6,$b7,$b6,$b7
+000993r 1  B6 B7 B6 B7  
+000997r 1  B6 B7 B6 B7  
+00099Fr 1  B6 B7 B6 B7  	.byte $b6,$b7,$b6,$b7,$b6,$b7,$b6,$b7,$b6,$b7,$b6,$b7,$b6,$b7,$b6,$b7
+0009A3r 1  B6 B7 B6 B7  
+0009A7r 1  B6 B7 B6 B7  
+0009AFr 1               NewWorldAttribute:
+0009AFr 1  54 50 50 00  	.byte $54,$50,$50,$00,$55,$01,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+0009B3r 1  55 01 00 00  
+0009B7r 1  00 00 00 00  
+0009BFr 1  00 00 00 00  	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$04,$05,$00
+0009C3r 1  00 00 00 00  
+0009C7r 1  00 00 00 00  
+0009CFr 1  00 A0 A0 00  	.byte $00,$a0,$a0,$00,$a0,$20,$00,$00,$00,$00,$00,$00,$00,$00,$f0,$00
+0009D3r 1  A0 20 00 00  
+0009D7r 1  00 00 00 00  
+0009DFr 1  F0 B0 A0 FC  	.byte $f0,$b0,$a0,$fc,$f3,$a0,$ff,$00,$0a,$0a,$0a,$0a,$0a,$0a,$0a,$0a
+0009E3r 1  F3 A0 FF 00  
+0009E7r 1  0A 0A 0A 0A  
+0009EFr 1               ;;Paleta de colores original
+0009EFr 1               NewWorldPalette:
+0009EFr 1               ;	.byte $21,$27,$16,$0f,$21,$20,$21,$0f,$21,$20,$16,$0f,$21,$2a,$1a,$0f
+0009EFr 1  21 27 16 0F      .byte $21,$27,$16,$0f,$21,$20,$21,$0f,$21,$37,$16,$0f,$21,$2a,$1a,$0f
+0009F3r 1  21 20 21 0F  
+0009F7r 1  21 37 16 0F  
+0009FFr 1  21 16 27 18      .byte $21,MEDIUM_RED,LIGHT_ORANGE,MEDIUM_YELLOW
+000A03r 1  27 16 20 27      .byte  LIGHT_ORANGE,MEDIUM_RED,$20,LIGHT_ORANGE
+000A07r 1  0F 16 16 29      .byte  BLACK,MEDIUM_RED,MEDIUM_RED,LIGHT_CHARTREUSE
+000A0Br 1  0F 16 16 29      .byte  BLACK,MEDIUM_RED,MEDIUM_RED,LIGHT_CHARTREUSE
+000A0Fr 1               
+000A0Fr 1               
+000A0Fr 1               
+000A0Fr 1               
+000A0Fr 1               
+000A0Fr 1               
+000A0Fr 1               
+000A0Fr 1               .segment "VECTORS" ; Direcciones para las ISR (rutinas de interrupcion)
 000000r 1  rr rr        .word nmi
 000002r 1  rr rr        .word reset
 000004r 1  rr rr        .word irq
