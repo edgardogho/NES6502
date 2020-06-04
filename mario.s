@@ -13,6 +13,8 @@
 ;; mira para el ultimo lado. Cuando salta levanta la mano y cuando cae
 ;; junta los brazos. Tiene soporte de gravedad.
 
+;; Mapa dibujado con NES Screen Tool
+
 ;; Autor Edgardo Gho
 ;; Junio 2020
 
