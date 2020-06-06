@@ -9,3 +9,5 @@ El archivo PDF asociado describe como ensamblar y correr el proyecto.
 ![Screenshot](https://github.com/edgardogho/NES6502/blob/master/mario-0.png)
 
 https://youtu.be/h7TVHbztogo
+
+https://youtu.be/jytonTEapKE
