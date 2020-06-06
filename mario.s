@@ -258,7 +258,13 @@ SIL = 24
     ;Color del cielo usado en el primer byte de la paleta de colores
     ;para cambiar el color del cielo cuando mario escucha LSD.
     
+    ;;Variable usada para saber que color tienen los elementos que
+    ;;hacen blink
     PaletteBlink: .res 1
+    
+    ;;Variable speed indica que mario se mueve mas rapido por boton B
+    MarioSpeed:   .res 1
+    
 
 
 ;;Segmento de codigo guardado en la ROM
@@ -394,6 +400,7 @@ LoadPalettesLoop:
   STA LSDPlaying
   STA LSDNote
   STA LSDNoteTime
+  STA MarioSpeed
   
 
   ;;Aqui termina la runtina de reset.. el codigo va a quedar ciclando
@@ -452,6 +459,10 @@ sigueMain:
   ;;Si el resultado da 0, entonces es seguro mover, sino no
   BNE noRight
   INC MarioOffsetX
+  LDA MarioSpeed
+  CMP #2
+  BNE noRight
+  INC MarioOffsetX
      
 noRight:
   ;; Verificamos si apreto  a la izquierda
@@ -463,6 +474,10 @@ noRight:
   ;;Verificamos si a la izquierda hay algo 
   JSR SUBVerificarCostado
   ;;Si el resultado da 0, entonces es seguro mover, sino no
+  BNE noLeft
+  DEC MarioOffsetX
+  LDA MarioSpeed
+  CMP #2
   BNE noLeft
   DEC MarioOffsetX
   
@@ -485,6 +500,15 @@ noLeft:
   LDA #%10000000
   STA MarioEstadoSalto
 noButtonA:
+  LDA #$01
+  STA MarioSpeed
+  LDA JoystickPress
+  AND #BUTTON_B
+  BEQ noButtonB
+  LDA #$02
+  STA MarioSpeed
+  
+noButtonB:
   ;;Aqui deberiamos verificar el boton B si se usara para algo 
 finBotonesCheck:
 
@@ -526,7 +550,7 @@ SUBBlinkPalette:
 	STA $2006     ; write the high byte of $3F10 address
 	LDA #$00
 	STA $2006     ; write the low byte of $3F10 address
-	LDA #$21
+	LDA LSDSky
 	STA $2007
 	
   ;;Si la paleta es $16 pasar a $25, si es $25 pasar
@@ -720,7 +744,7 @@ SUBVerificarCostado:
 	;;en MarioOffsetX-1 con ambos MarioOffsetY y MarioOffsetY
 	LDA MarioOffsetX
 	CLC
-	SBC #1
+	SBC MarioSpeed
 	STA FindTileX
 	LDA MarioOffsetY
 	STA FindTileY
@@ -731,7 +755,8 @@ verificaDerecha:
     STA TileCount
     LDA MarioOffsetX
     CLC
-    ADC #17
+    ADC #16
+    ADC MarioSpeed
     STA FindTileX
     LDA MarioOffsetY
     STA FindTileY
